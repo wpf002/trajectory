@@ -22,7 +22,9 @@ Then open http://localhost:5000. The SQLite database bootstraps itself on first 
 fully working — add signals by hand on the Signals page, or run the collectors from the
 Sources page to populate it from live data.
 
-To use a different port: `PORT=5173 npm run dev`.
+To use a different port: `PORT=5173 npm run dev`. On macOS you generally need to — port
+5000 is held by Control Center's AirPlay Receiver unless you turn it off in
+System Settings → General → AirDrop & Handoff.
 
 ## How the model works
 
