@@ -110,7 +110,10 @@ export async function analyzeWithLLM(input: {
   const response = await client.messages.create({
     model: ANALYZER_MODEL,
     max_tokens: 4000,
-    system: buildSystemPrompt(),
+    // buildSystemPrompt() is deterministic (driver constants only), ~940 tokens, and
+    // the headline route calls this once per headline in a sequential loop. Behind a
+    // breakpoint every headline after the first reads it at ~0.1x.
+    system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userMsg }],
   });
 
