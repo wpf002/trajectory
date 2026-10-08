@@ -18,6 +18,7 @@ import {
   computeScenarioProbabilities,
   type DriverId,
   aggregateDriverValues,
+  SIGNAL_HALF_LIFE_DAYS,
 } from "../shared/model";
 import { analyzeWithLLM, heuristicAnalyze, computeClusterKey, type AnalyzerResult } from "./analyzer";
 import { analyzeWithEnsemble, type EnsembleResult } from "./ensemble";
@@ -435,7 +436,8 @@ export async function registerRoutes(
     }
     // Weighted by recency: see SIGNAL_HALF_LIFE_DAYS in shared/model.ts for why
     // an unweighted running sum pegs drivers at 0 or 1 and freezes the forecast.
-    return aggregateDriverValues(folded);
+    const halfLifeDays = Number(process.env.SIGNAL_HALF_LIFE_DAYS ?? SIGNAL_HALF_LIFE_DAYS);
+    return aggregateDriverValues(folded, { halfLifeDays });
   }
 
   app.get("/api/probabilities", async (_req, res) => {

@@ -835,8 +835,11 @@ export function coherenceFindings(): CoherenceFinding[] {
  * signals a visible tail. The choice is not load-bearing for the conclusion —
  * the ranking of scenarios is identical anywhere from a 7-day to a 120-day
  * half-life — so it is tuned for responsiveness, not to land on an answer.
+ *
+ * This file is bundled into the client, so it must not read process.env; the
+ * server applies the SIGNAL_HALF_LIFE_DAYS override in computeCurrentDrivers.
  */
-export const SIGNAL_HALF_LIFE_DAYS = Number(process.env.SIGNAL_HALF_LIFE_DAYS ?? 30);
+export const SIGNAL_HALF_LIFE_DAYS = 30;
 
 /** Recency weight in (0,1] for a signal `ageSeconds` old. 1.0 at age zero. */
 export function recencyWeight(ageSeconds: number, halfLifeDays = SIGNAL_HALF_LIFE_DAYS): number {
