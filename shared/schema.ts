@@ -156,7 +156,12 @@ export type InsertHolding = z.infer<typeof insertHoldingSchema>;
 export type DecisionEntry = typeof decisionJournalEntries.$inferSelect;
 export type InsertDecisionEntry = z.infer<typeof insertDecisionSchema>;
 
-export const insertSignalSchema = createInsertSchema(signals).omit({ id: true });
+// direction was free text, and /api/events once stored "positive"/"negative",
+// which nothing downstream recognizes.
+export const SIGNAL_DIRECTIONS = ["accelerating", "decelerating", "neutral"] as const;
+export const insertSignalSchema = createInsertSchema(signals, {
+  direction: z.enum(SIGNAL_DIRECTIONS),
+}).omit({ id: true });
 export const insertMilestoneSchema = createInsertSchema(milestones);
 export const insertPresetSchema = createInsertSchema(presets);
 export const insertModelReleaseSchema = createInsertSchema(modelReleases);

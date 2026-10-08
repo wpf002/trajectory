@@ -1,14 +1,11 @@
 # Trajectory
 
-A scenario-forecasting engine for AI trajectories. Twelve observable drivers feed six
-coupled scenarios; news signals shift the drivers, the drivers move the probabilities, and
-every move is recorded so the forecast can be scored against Metaculus, Manifold, and a
-historical backtest.
+A scenario-forecasting engine for AI trajectories. News signals move twelve drivers; the
+drivers set the probabilities of six scenarios for 2028. Every move is recorded.
 
-The premise the app is built around: most forecasting sites price questions
-*independently*. Trajectory models them as one coupled system — labor displacement,
-governance response, and geopolitical stability move together — and treats disagreement
-with the crowd as a prompt to inspect your assumptions rather than as noise.
+Nothing the app forecasts has resolved yet, so it has no accuracy score. The Calibration
+page lists what can be checked today: pending release-date calls and a comparison against
+Metaculus.
 
 ## Quick start
 
@@ -28,20 +25,23 @@ System Settings → General → AirDrop & Handoff.
 
 ## How the model works
 
-**Drivers** (`shared/model.ts`) are 12 quantities in `[0,1]` with a real-world data anchor
-and a source URL each — compute scaling, inference cost decline, alignment progress,
-energy availability, labor displacement, and so on. Their defaults reflect observed early-2026
-values; you can drag any of them to see a counterfactual.
+**Drivers** (`shared/model.ts`) are 12 quantities in `[0,1]`: compute scaling, inference
+cost decline, alignment progress, energy availability, labor displacement, and so on. Each
+starts from a prior with a cited source. Signals move them from there. On the dashboard,
+dragging a slider is a what-if on top of the news-derived values; Reset returns to them.
 
 **Scenarios** are six worldviews (Curiosity Renaissance, Managed Transition, Oligarchic
 Capture, Cold AI War, Great Filter Realized, Compute Wall). Each assigns a signed weight to
 every driver. Probabilities are a softmax over the weighted driver sums, so the six always
 sum to 1 and a driver that helps one scenario necessarily costs the others.
 
-**Signals** are news items. Each is analyzed into a set of small signed driver deltas
-(`±0.01` incremental → `±0.05` paradigm-shifting), weighted by source tier and analyzer
-confidence, then applied. Every application writes a `forecast_history` row, which is what
-the Calibration page's drift chart and the Brier score are computed from.
+**Signals** are news items. Each is analyzed into small signed driver deltas (`±0.01`
+incremental to `±0.05` paradigm-shifting) and stored multiplied by analyzer confidence and
+source-tier weight. A driver's value is the sum of those deltas, each halved every 30 days
+(`SIGNAL_HALF_LIFE_DAYS`), mapped through a logistic around the prior. The sum is taken
+before the logistic, so the result doesn't depend on arrival order and a driver near 0 or 1
+still responds to new signals. Every signal writes a `forecast_history` snapshot, which
+feeds the history chart.
 
 **Assumptions** are inspectable: the Assumptions page lists every driver weight and early
 indicator behind each scenario, and lets you record disagreement with any of them.
@@ -89,8 +89,14 @@ outlets counts once.
 | `npm run build` | Vite build + esbuild bundle to `dist/` |
 | `npm start` | Run the production bundle |
 | `npm run check` | TypeScript typecheck |
-| `npm test` | Unit tests (`node:test` via tsx) |
+| `npm test` | Unit and API tests (`node:test` via tsx, scratch SQLite per run) |
 | `npm run db:push` | Push the Drizzle schema |
+| `npm run reanalyze` | Re-score stored signals with the LLM into `signal_reanalysis` (`--dry-run`, `--limit N`, `--report`) |
+| `npx tsx script/promote-reanalysis.ts` | Copy re-scores into `signals`; `--revert` restores the backup |
+| `npx tsx script/compare-forecast.ts` | Forecast under keyword vs LLM scores |
+| `npx tsx script/rebuild-history.ts` | Recompute `forecast_history` under the current model; `--revert` restores |
+
+CI runs typecheck, tests, and build on every push and PR (`.github/workflows/ci.yml`).
 
 `cron/daily_update.sh` starts the server if it isn't running, then runs the collectors and
 evaluates the watchlist. Point a daily cron at it to keep the forecast advancing.
@@ -100,6 +106,7 @@ evaluates the watchlist. Point a daily cron at it to keep the forecast advancing
 ```
 client/src/pages/      one file per route (Dashboard, Signals, Calibration, …)
 client/src/components/ shared visualizations (correlation matrix, provenance graph, …)
+server/app.ts          Express app + error handling (used by index.ts and the tests)
 server/routes.ts       the whole HTTP API
 server/analyzer.ts     LLM analyzer + keyword fallback + cluster keys
 server/ensemble.ts     3-variant ensemble analyzer
@@ -119,6 +126,9 @@ Routing is hash-based (`/#/signals`), so the built client works from a static ho
 | --- | --- | --- |
 | `ANTHROPIC_API_KEY` | — | Enables the LLM and ensemble analyzers |
 | `ANALYZER_MODEL` | `claude-opus-5` | Model used for signal analysis |
+| `METACULUS_API_TOKEN` | — | Live Metaculus numbers. Without it the comparison uses a stored value and says so |
+| `SIGNAL_HALF_LIFE_DAYS` | `30` | How fast old signals fade |
+| `DB_PATH` | `data.db` | SQLite file |
 | `PORT` | `5000` | Server port |
 | `HOST` | `0.0.0.0` | Bind address |
 | `NODE_ENV` | `development` | `production` serves `dist/` instead of Vite |

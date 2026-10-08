@@ -764,10 +764,17 @@ export async function registerRoutes(
     const eventTs = body.eventDate ?? nowSec;
     const { tier, domain } = classifySource(body.sourceUrl || "structured-event");
     const magnitude = Math.max(...Object.values(body.driverImpacts).map(v => Math.abs(v)));
-    const direction = Object.values(body.driverImpacts).reduce((a, b) => a + b, 0) >= 0 ? "positive" : "negative";
+    // Same rule the LLM analyzer falls back to. This used to write
+    // "positive"/"negative", which no other part of the app recognizes.
+    const net = Object.values(body.driverImpacts).reduce((a, b) => a + b, 0);
+    const total = Object.values(body.driverImpacts).reduce((a, b) => a + Math.abs(b), 0);
+    const direction = total < 0.02 ? "neutral" : net > 0 ? "accelerating" : "decelerating";
 
-    // Confidence-weight impacts.
-    const weighted = weightImpacts(body.driverImpacts, body.confidence, tierMultiplier(tier));
+    // A declared event with no recognizable source counts as primary. Weight by
+    // that same effective tier: this used to weight at unknown (0.4) while
+    // storing the row as primary (1.0), so the label overstated the influence.
+    const effectiveTier = tier === "unknown" ? "primary" : tier;
+    const weighted = weightImpacts(body.driverImpacts, body.confidence, tierMultiplier(effectiveTier));
 
     const signal = storage.addSignal({
       title: body.title,
@@ -783,7 +790,7 @@ export async function registerRoutes(
       reasoning: `Declared structured event (${body.kind}); impacts asserted, not inferred.`,
       confidence: body.confidence,
       analyzer: "structured",
-      sourceTier: tier === "unknown" ? "primary" : tier,
+      sourceTier: effectiveTier,
       sourceDomain: domain,
       clusterKey: `event:${body.kind}:${body.title.toLowerCase().replace(/\s+/g, "-").slice(0, 40)}`,
       eventDate: eventTs,
