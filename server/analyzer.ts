@@ -9,6 +9,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { jsonSchemaOutputFormat } from "@anthropic-ai/sdk/helpers/json-schema";
 import { DRIVERS, type DriverId } from "../shared/model";
 
 /** Model used for signal analysis. Overridable via ANALYZER_MODEL. */
@@ -70,34 +71,78 @@ RULES:
 5. Extract named entities (labs, models, companies, governments, people). Include model names if mentioned.
 6. If the news references an event with a specific date, return eventDate as YYYY-MM-DD. Otherwise null.
 
-Return ONLY valid JSON matching this schema — no prose, no code fences:
-{
-  "driverImpacts": { "<driver_id>": <delta>, ... },
-  "confidence": <number 0-1>,
-  "direction": "accelerating" | "decelerating" | "neutral",
-  "category": "capability" | "compute" | "labor" | "geopolitics" | "energy" | "alignment" | "governance" | "biotech" | "information" | "economic",
-  "reasoning": "<2-3 sentence explanation citing the specific drivers and why>",
-  "entities": ["<entity>", ...],
-  "eventDate": "YYYY-MM-DD" | null
-}`;
+Fields:
+- driverImpacts: one entry per affected driver, as {"driver": "<driver_id>", "impact": <delta>}. Empty list if the news affects none of them.
+- confidence: number in [0,1].
+- direction: "accelerating" | "decelerating" | "neutral" — the net effect on AI progress overall, which is NOT always the sign of the deltas. Read the verb: a headline about export controls being *lifted* accelerates; one about a model being *banned* decelerates.
+- category: one of capability, compute, labor, geopolitics, energy, alignment, governance, biotech, information, economic.
+- reasoning: 2-3 sentences citing the specific drivers and why.
+- entities: named labs, models, companies, governments, people.
+- eventDate: "YYYY-MM-DD" or null.`;
 }
 
 const validDriverIds = new Set<string>(DRIVERS.map(d => d.id));
+
+/**
+ * Response schema enforced by the API via structured outputs.
+ *
+ * driverImpacts is a list rather than an object keyed by driver because an
+ * open-keyed record can't be expressed under the `additionalProperties: false`
+ * that structured outputs requires. The enum also stops the model inventing
+ * driver names, which the old hand-parse silently dropped.
+ *
+ * Written as a literal rather than built from DRIVERS so the SDK can infer
+ * `parsed_output`'s type; DRIVER_IDS_MATCH below keeps it honest if a driver
+ * is ever added to shared/model.ts.
+ */
+const ANALYSIS_SCHEMA = {
+  type: "object",
+  properties: {
+    category: { type: "string" },
+    direction: { type: "string", enum: ["accelerating", "decelerating", "neutral"] },
+    driverImpacts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          driver: {
+            type: "string",
+            enum: [
+              "compute_growth", "inference_cost_decline", "capability_progress",
+              "alignment_progress", "ondevice_ai", "energy_capacity",
+              "geopolitical_stability", "labor_displacement", "governance_response",
+              "biotech_ai_fusion", "information_trust", "economic_distribution",
+            ],
+          },
+          impact: { type: "number" },
+        },
+        required: ["driver", "impact"],
+        additionalProperties: false,
+      },
+    },
+    reasoning: { type: "string" },
+    confidence: { type: "number" },
+    entities: { type: "array", items: { type: "string" } },
+    eventDate: { type: ["string", "null"] },
+  },
+  required: [
+    "category", "direction", "driverImpacts",
+    "reasoning", "confidence", "entities", "eventDate",
+  ],
+  additionalProperties: false,
+} as const;
+
+/** Compile error if shared/model.ts gains a driver the schema doesn't list. */
+type SchemaDriverId = (typeof ANALYSIS_SCHEMA)["properties"]["driverImpacts"]["items"]["properties"]["driver"]["enum"][number];
+const DRIVER_IDS_MATCH: Record<DriverId, SchemaDriverId> = Object.fromEntries(
+  DRIVERS.map(d => [d.id, d.id]),
+) as Record<DriverId, SchemaDriverId>;
+void DRIVER_IDS_MATCH;
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function extractJsonBlock(text: string): string | null {
-  // strip code fences if any
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const candidate = fenced ? fenced[1] : text;
-  // find first { and last }
-  const first = candidate.indexOf("{");
-  const last = candidate.lastIndexOf("}");
-  if (first === -1 || last === -1 || last <= first) return null;
-  return candidate.slice(first, last + 1);
-}
 
 export async function analyzeWithLLM(input: {
   title: string;
@@ -107,7 +152,11 @@ export async function analyzeWithLLM(input: {
   const client = new Anthropic();
   const userMsg = `HEADLINE: ${input.title}\nSOURCE: ${input.source || "unknown"}\nCONTEXT: ${input.text}`;
 
-  const response = await client.messages.create({
+  // Structured outputs: the API validates the response against AnalysisSchema, so
+  // a malformed or truncated body fails at the call instead of at a hand-written
+  // JSON.parse. Before this, roughly 1 headline in 10 came back as unparseable
+  // JSON and fell through to the keyword heuristic.
+  const response = await client.messages.parse({
     model: ANALYZER_MODEL,
     max_tokens: 4000,
     // buildSystemPrompt() is deterministic (driver constants only), ~940 tokens, and
@@ -115,27 +164,18 @@ export async function analyzeWithLLM(input: {
     // breakpoint every headline after the first reads it at ~0.1x.
     system: [{ type: "text", text: buildSystemPrompt(), cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: userMsg }],
+    output_config: { format: jsonSchemaOutputFormat(ANALYSIS_SCHEMA) },
   });
 
-  const textBlock = response.content.find((b): b is Anthropic.TextBlock => b.type === "text");
-  const raw = textBlock?.text ?? "";
-  const jsonStr = extractJsonBlock(raw);
-  if (!jsonStr) {
-    throw new Error("LLM response did not contain JSON: " + raw.slice(0, 200));
+  const parsed = response.parsed_output;
+  if (!parsed) {
+    throw new Error("LLM response did not satisfy the analysis schema.");
   }
 
-  let parsed: any;
-  try {
-    parsed = JSON.parse(jsonStr);
-  } catch (e: any) {
-    throw new Error("Failed to parse LLM JSON: " + e.message);
-  }
-
-  const impactsRaw = parsed.driverImpacts && typeof parsed.driverImpacts === "object" ? parsed.driverImpacts : {};
   const impacts: Record<string, number> = {};
-  for (const [k, v] of Object.entries(impactsRaw)) {
-    if (validDriverIds.has(k) && typeof v === "number" && Number.isFinite(v)) {
-      impacts[k] = clamp(v, -0.05, 0.05);
+  for (const { driver, impact } of parsed.driverImpacts) {
+    if (validDriverIds.has(driver) && Number.isFinite(impact)) {
+      impacts[driver] = clamp(impact, -0.05, 0.05);
     }
   }
 

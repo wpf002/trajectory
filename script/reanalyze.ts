@@ -13,6 +13,7 @@
  * Resumable: signals already in signal_reanalysis are skipped, so re-running
  * after a crash or a Ctrl-C picks up where it stopped.
  */
+import "dotenv/config";
 import Database from "better-sqlite3";
 import { analyzeWithLLM, ANALYZER_MODEL, type AnalyzerResult } from "../server/analyzer";
 
