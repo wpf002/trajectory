@@ -89,6 +89,10 @@ export const calibrationResiduals = sqliteTable("calibration_residuals", {
   crowdProbability: real("crowd_probability").notNull(),
   residual: real("residual").notNull(), // our - crowd
   timestamp: integer("timestamp").notNull(),
+  // "live" when fetched from the Metaculus API, "snapshot" when it fell back to
+  // the hardcoded METACULUS_SNAPSHOT. Rows written before this column existed
+  // are all snapshot: the API has returned 403 without a token.
+  crowdSource: text("crowd_source").notNull().default("snapshot"),
 });
 
 // -- Backtest runs: replay historical events, compare model output to actual outcome --

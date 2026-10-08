@@ -144,16 +144,24 @@ const CALIBRATION_QUESTIONS: Array<{
   },
 ];
 
-/** Fetch a Metaculus question's current community probability. Returns null on failure. */
+/**
+ * Fetch a Metaculus question's current community probability. Returns null on
+ * failure. The API has required a token since at least mid-2026 (anonymous
+ * requests get 403), so without METACULUS_API_TOKEN this always falls through
+ * to the snapshot and the caller must label the comparison as such.
+ */
 async function fetchMetaculusProbability(questionId: string): Promise<number | null> {
   try {
-    const r = await fetch(`https://www.metaculus.com/api2/questions/${questionId}/`, {
-      headers: { 'User-Agent': 'Trajectory-Forecasting/1.0' },
-    });
+    const headers: Record<string, string> = { 'User-Agent': 'Trajectory-Forecasting/1.0' };
+    if (process.env.METACULUS_API_TOKEN) {
+      headers.Authorization = `Token ${process.env.METACULUS_API_TOKEN}`;
+    }
+    const r = await fetch(`https://www.metaculus.com/api2/questions/${questionId}/`, { headers });
     if (!r.ok) return null;
     const data: any = await r.json();
     const p = data?.community_prediction?.full?.q2
       ?? data?.community_prediction?.q2
+      ?? data?.question?.aggregations?.recency_weighted?.latest?.centers?.[0]
       ?? null;
     if (typeof p === "number") return p;
     return null;
@@ -197,17 +205,6 @@ function computeSensitivity(driverValues: Record<DriverId, number>) {
 
   results.sort((a, b) => b.leverage - a.leverage);
   return { baseline: baselineMap, drivers: results };
-}
-
-/** Apply driver impacts additively with clamping — used by both live and backtest. */
-function applyImpacts(base: Record<DriverId, number>, impacts: Record<string, number>): Record<DriverId, number> {
-  const out = { ...base };
-  for (const [k, delta] of Object.entries(impacts)) {
-    if (k in out) {
-      out[k as DriverId] = Math.max(0, Math.min(1, out[k as DriverId] + delta));
-    }
-  }
-  return out;
 }
 
 /** Compute confidence-weighted impacts. */
@@ -922,28 +919,36 @@ export async function registerRoutes(
     const probs = computeScenarioProbabilities(values);
     const nowSec = Math.floor(Date.now() / 1000);
     const results: any[] = [];
+    const skipped: Array<{ questionId: string; reason: string }> = [];
+
     for (const q of CALIBRATION_QUESTIONS) {
-      const crowd = await fetchMetaculusProbability(q.metaculusQuestionId);
+      const ours = probs.find(p => p.id === q.scenarioId)?.probability ?? 0;
+      const live = await fetchMetaculusProbability(q.metaculusQuestionId);
+      let crowd = live;
+      let crowdSource: "live" | "snapshot" = "live";
       if (crowd === null) {
-        // If Metaculus is unreachable, use the snapshot fallback for AGI-by-2030 (question 11861).
-        const fallback = METACULUS_SNAPSHOT.find(m => m.url.includes(q.metaculusQuestionId));
-        if (!fallback || typeof fallback.probability !== "number") continue;
-        const ours = probs.find(p => p.id === q.scenarioId)?.probability ?? 0;
-        const row = storage.addCalibrationResidual({
-          scenarioId: q.scenarioId,
-          metaculusQuestionId: q.metaculusQuestionId,
-          metaculusQuestionTitle: q.metaculusQuestionTitle,
-          metaculusUrl: q.metaculusUrl,
-          ourProbability: ours,
-          crowdProbability: fallback.probability,
-          residual: ours - fallback.probability,
-          timestamp: nowSec,
-        });
-        results.push(row);
+        const fallback = METACULUS_SNAPSHOT.find(m => m.url.includes(`/${q.metaculusQuestionId}/`));
+        if (!fallback || typeof fallback.probability !== "number") {
+          skipped.push({ questionId: q.metaculusQuestionId, reason: "unreachable and no snapshot value" });
+          continue;
+        }
+        crowd = fallback.probability;
+        crowdSource = "snapshot";
+      }
+
+      // An identical row to the last one for this question adds a data point
+      // that isn't one — two refreshes an hour apart used to record the same
+      // residual twice and the chart read it as a stable trend.
+      const prev = storage.listCalibrationResiduals(500)
+        .find(r => r.metaculusQuestionId === q.metaculusQuestionId);
+      if (prev && prev.crowdSource === crowdSource
+          && Math.abs(prev.ourProbability - ours) < 1e-4
+          && Math.abs(prev.crowdProbability - crowd) < 1e-4) {
+        skipped.push({ questionId: q.metaculusQuestionId, reason: "unchanged since last refresh" });
         continue;
       }
-      const ours = probs.find(p => p.id === q.scenarioId)?.probability ?? 0;
-      const row = storage.addCalibrationResidual({
+
+      results.push(storage.addCalibrationResidual({
         scenarioId: q.scenarioId,
         metaculusQuestionId: q.metaculusQuestionId,
         metaculusQuestionTitle: q.metaculusQuestionTitle,
@@ -952,10 +957,85 @@ export async function registerRoutes(
         crowdProbability: crowd,
         residual: ours - crowd,
         timestamp: nowSec,
-      });
-      results.push(row);
+        crowdSource,
+      }));
     }
-    res.json({ ok: true, refreshed: results.length, results });
+    res.json({ ok: true, refreshed: results.length, results, skipped });
+  });
+
+  /**
+   * What the forecaster can honestly be scored on right now.
+   *
+   * Scenario forecasts resolve around 2028 and nothing in the archive has
+   * resolved yet, so there is no accuracy number to report — this says so
+   * rather than inventing one. Release-date predictions do resolve, and become
+   * scoreable the moment a predicted model's status flips to "released".
+   */
+  app.get("/api/calibration/scorecard", async (_req, res) => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const DAY = 86400;
+    const releases = storage.listModelReleases();
+
+    const resolved = releases
+      .filter(m => m.status === "released" && m.releaseDate && m.predictedReleaseP50)
+      .map(m => {
+        const errDays = (m.releaseDate! - m.predictedReleaseP50!) / DAY;
+        const inInterval = m.predictedReleaseP10 != null && m.predictedReleaseP90 != null
+          ? m.releaseDate! >= m.predictedReleaseP10 && m.releaseDate! <= m.predictedReleaseP90
+          : null;
+        return { id: m.id, name: m.name, lab: m.lab, predicted: m.predictedReleaseP50!, actual: m.releaseDate!, errorDays: errDays, inInterval };
+      });
+
+    const pending = releases
+      .filter(m => m.status !== "released" && m.predictedReleaseP50)
+      .map(m => ({ id: m.id, name: m.name, lab: m.lab, predicted: m.predictedReleaseP50!, overdue: m.predictedReleaseP50! < nowSec }))
+      .sort((a, b) => a.predicted - b.predicted);
+
+    const withInterval = resolved.filter(r => r.inInterval !== null);
+    const releaseScore = resolved.length === 0 ? null : {
+      n: resolved.length,
+      meanAbsErrorDays: resolved.reduce((s, r) => s + Math.abs(r.errorDays), 0) / resolved.length,
+      meanBiasDays: resolved.reduce((s, r) => s + r.errorDays, 0) / resolved.length,
+      intervalCoverage: withInterval.length
+        ? withInterval.filter(r => r.inInterval).length / withInterval.length
+        : null,
+    };
+
+    // Latest comparison per Metaculus question, with where the crowd number came from.
+    const latestByQ = new Map<string, any>();
+    for (const r of storage.listCalibrationResiduals(500)) {
+      if (!latestByQ.has(r.metaculusQuestionId)) latestByQ.set(r.metaculusQuestionId, r);
+    }
+    const crowd = CALIBRATION_QUESTIONS.map(q => {
+      const r = latestByQ.get(q.metaculusQuestionId);
+      return {
+        questionId: q.metaculusQuestionId,
+        title: q.metaculusQuestionTitle,
+        url: q.metaculusUrl,
+        scenarioId: q.scenarioId,
+        lens: q.scenarioLens,
+        ours: r?.ourProbability ?? null,
+        crowd: r?.crowdProbability ?? null,
+        residual: r?.residual ?? null,
+        source: r?.crowdSource ?? null,
+        asOf: r?.timestamp ?? null,
+      };
+    });
+
+    res.json({
+      generatedAt: nowSec,
+      scenarios: {
+        resolved: 0,
+        status: "unresolved",
+        note: "Scenario outcomes are defined around 2028. No accuracy score exists until they resolve.",
+      },
+      releases: { score: releaseScore, resolved, pending },
+      crowd: {
+        comparisons: crowd,
+        liveCount: crowd.filter(c => c.source === "live").length,
+        tokenConfigured: Boolean(process.env.METACULUS_API_TOKEN),
+      },
+    });
   });
 
   // ---- Read-only public prediction API (F25) ----
@@ -1079,49 +1159,42 @@ export async function registerRoutes(
     const events = eventsChronological();
     if (events.length === 0) return res.status(400).json({ error: "no events" });
 
-    let drivers: Record<DriverId, number> = { ...DEFAULT_DRIVER_VALUES };
     // Backtests start from a plausible 2024 baseline: capability slightly lower, alignment progress lower.
-    drivers.capability_progress = Math.max(0, drivers.capability_progress - 0.15);
-    drivers.alignment_progress = Math.max(0, drivers.alignment_progress - 0.1);
-    drivers.governance_response = Math.max(0, drivers.governance_response - 0.1);
-    drivers.labor_displacement = Math.max(0, drivers.labor_displacement - 0.1);
+    const base: Record<DriverId, number> = { ...DEFAULT_DRIVER_VALUES };
+    base.capability_progress = Math.max(0, base.capability_progress - 0.15);
+    base.alignment_progress = Math.max(0, base.alignment_progress - 0.1);
+    base.governance_response = Math.max(0, base.governance_response - 0.1);
+    base.labor_displacement = Math.max(0, base.labor_displacement - 0.1);
 
+    // Replay with the same fold the live forecast uses (recency-weighted,
+    // log-odds), evaluated as of each event's date. The old replay used a
+    // different aggregation than the live model, so it traced a forecaster
+    // that does not exist.
+    const folded = events.map(ev => ({
+      timestamp: unixSecondsForDate(ev.date),
+      impacts: weightImpacts(ev.driverImpacts as Record<string, number>, ev.confidence, 1.0),
+    }));
     const trajectory: Array<{ date: string; probs: Record<string, number>; drivers: Record<string, number>; event: string }> = [];
-    let eventCount = 0;
-
-    for (const ev of events) {
-      // Apply confidence-weighted impacts.
-      const weighted = weightImpacts(ev.driverImpacts, ev.confidence, 1.0);
-      drivers = applyImpacts(drivers, weighted);
-      const probs = computeScenarioProbabilities(drivers);
+    for (let i = 0; i < events.length; i++) {
+      const drivers = aggregateDriverValues(folded.slice(0, i + 1), { asOf: folded[i].timestamp, base });
       const probsMap: Record<string, number> = {};
-      for (const p of probs) probsMap[p.id] = p.probability;
-      trajectory.push({
-        date: ev.date,
-        probs: probsMap,
-        drivers: { ...drivers } as Record<string, number>,
-        event: ev.title,
-      });
-      eventCount++;
+      for (const p of computeScenarioProbabilities(drivers)) probsMap[p.id] = p.probability;
+      trajectory.push({ date: events[i].date, probs: probsMap, drivers: { ...drivers }, event: events[i].title });
     }
+    const eventCount = trajectory.length;
 
     const finalProbs = trajectory[trajectory.length - 1]?.probs ?? {};
     const nowSec = Math.floor(Date.now() / 1000);
     const startDate = unixSecondsForDate(events[0].date);
     const endDate = unixSecondsForDate(events[events.length - 1].date);
 
-    // Best-match scenario for "actual" outcome ≈ current top scenario from live signals
-    const liveDrivers = computeCurrentDrivers();
-    const liveProbs = computeScenarioProbabilities(liveDrivers);
-    const actualOutcomeScenario = liveProbs.sort((a, b) => b.probability - a.probability)[0]?.id ?? null;
-
-    // Brier: sum over scenarios of (p_final - o)^2, where o=1 for outcome scenario, 0 else.
-    let brier = 0;
-    for (const s of SCENARIOS) {
-      const p = finalProbs[s.id] ?? 0;
-      const o = s.id === actualOutcomeScenario ? 1 : 0;
-      brier += (p - o) ** 2;
-    }
+    // No Brier score. The old one scored this replay against the live model's
+    // own top scenario — the forecaster graded against itself, which produced
+    // the identical 0.7232 on every run. None of the scenarios resolve before
+    // ~2028, so there is no outcome to score against yet; see
+    // /api/calibration/scorecard for what can be scored today.
+    const actualOutcomeScenario = null;
+    const brier = null;
 
     const run = storage.upsertBacktestRun({
       id: body.id,

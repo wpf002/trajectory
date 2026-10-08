@@ -169,6 +169,7 @@ ensureColumn("signals", "source_domain", "TEXT");
 ensureColumn("signals", "cluster_key", "TEXT");
 ensureColumn("signals", "event_date", "INTEGER");
 ensureColumn("signals", "pinned", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("calibration_residuals", "crowd_source", "TEXT NOT NULL DEFAULT 'snapshot'");
 
 export const db = drizzle(sqlite);
 
