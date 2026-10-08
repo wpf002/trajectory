@@ -29,8 +29,7 @@ interface EvalResp {
 
 function fmtWhen(sec: number | null | undefined) {
   if (!sec) return "never";
-  const d = new Date(sec * 1000);
-  return d.toLocaleString();
+  return new Date(sec * 1000).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export default function Watchlist() {
@@ -99,6 +98,8 @@ export default function Watchlist() {
 
   const list = items.data ?? [];
   const triggeredIds = new Set((evalQ.data?.triggered ?? []).map((t) => t.id));
+  // Evaluate's copy of lastTriggeredAt is current; the list query may predate it.
+  const crossedSince = new Map((evalQ.data?.triggered ?? []).map((t) => [t.id, t.lastTriggeredAt]));
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6" data-testid="page-watchlist">
@@ -215,7 +216,7 @@ export default function Watchlist() {
                   >
                     <div
                       className="w-2 h-10 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: scenario?.color || "#888" }}
+                      style={{ backgroundColor: scenario?.color || "hsl(var(--muted-foreground))" }}
                     />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
@@ -227,11 +228,14 @@ export default function Watchlist() {
                       {w.note && <div className="text-xs text-muted-foreground truncate">{w.note}</div>}
                       <div className="text-[11px] font-mono text-muted-foreground mt-1 flex items-center gap-3">
                         <span>Current: <strong className={isTriggered ? "text-accent" : "text-foreground"}>{cur.toFixed(1)}%</strong></span>
-                        <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> Last fire: {fmtWhen(w.lastTriggeredAt)}</span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {isTriggered ? <>Crossed {fmtWhen(crossedSince.get(w.id) ?? null)}</> : "Not crossed"}
+                        </span>
                       </div>
                     </div>
                     {isTriggered && (
-                      <Badge className="bg-accent text-accent-foreground">Triggered</Badge>
+                      <Badge className="bg-accent text-accent-foreground">Crossed</Badge>
                     )}
                     <Button
                       variant="ghost"
@@ -252,7 +256,7 @@ export default function Watchlist() {
       <Card>
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground">
-            Alerts are checked against the current forecast each time the collectors run.
+            Checked when this page loads and when <span className="font-mono">cron/daily_update.sh</span> runs.
           </div>
         </CardContent>
       </Card>

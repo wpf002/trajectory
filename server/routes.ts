@@ -1259,6 +1259,16 @@ export async function registerRoutes(
     for (const w of watchlist) {
       const cur = (probsById[w.scenarioId] ?? 0) * 100;
       const crossed = w.op === "gt" ? cur >= w.thresholdPct : cur <= w.thresholdPct;
+      // lastTriggeredAt means "crossed since": set on the first evaluation that
+      // finds it crossed, cleared when it uncrosses so the alert re-arms. Before
+      // this nothing ever wrote it, so every alert looked like it had never fired.
+      const newlyTriggered = crossed && w.lastTriggeredAt == null;
+      if (newlyTriggered) {
+        storage.setWatchlistTriggered(w.id, nowSec);
+        w.lastTriggeredAt = nowSec;
+      } else if (!crossed && w.lastTriggeredAt != null) {
+        storage.setWatchlistTriggered(w.id, null);
+      }
       if (crossed) {
         triggered.push({
           id: w.id,
@@ -1269,6 +1279,7 @@ export async function registerRoutes(
           currentPct: cur,
           note: w.note ?? null,
           lastTriggeredAt: w.lastTriggeredAt,
+          newlyTriggered,
         });
       }
     }
@@ -1330,7 +1341,12 @@ export async function registerRoutes(
     try {
       const patch: any = {};
       if (typeof req.body.outcome === "string") patch.outcome = req.body.outcome;
-      if (typeof req.body.outcomeScore === "number") patch.outcomeScore = req.body.outcomeScore;
+      if (typeof req.body.outcomeScore === "number") {
+        if (!(req.body.outcomeScore >= -1 && req.body.outcomeScore <= 1)) {
+          return res.status(400).json({ error: "outcomeScore must be between -1 and 1" });
+        }
+        patch.outcomeScore = req.body.outcomeScore;
+      }
       if (typeof req.body.reviewAt === "number") patch.reviewAt = req.body.reviewAt;
       const out = storage.updateDecision(Number(req.params.id), patch);
       if (!out) return res.status(404).json({ error: "not found" });

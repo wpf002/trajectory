@@ -38,27 +38,7 @@ export const forecastHistory = sqliteTable("forecast_history", {
   triggerSignalId: integer("trigger_signal_id"),
 });
 
-// Milestones: predicted future events with probabilities
-export const milestones = sqliteTable("milestones", {
-  id: text("id").primaryKey(),
-  title: text("title").notNull(),
-  description: text("description").notNull(),
-  category: text("category").notNull(),
-  medianYear: real("median_year").notNull(),
-  p10Year: real("p10_year").notNull(),
-  p90Year: real("p90_year").notNull(),
-  drivers: text("drivers").notNull(),
-  status: text("status").notNull().default("pending"),
-});
 
-// Driver configuration presets
-export const presets = sqliteTable("presets", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  description: text("description").notNull(),
-  driverValues: text("driver_values").notNull(),
-  isBuiltIn: integer("is_built_in", { mode: "boolean" }).notNull().default(false),
-});
 
 // -- Model releases: per-model release tracking (separate from scenario drivers) --
 export const modelReleases = sqliteTable("model_releases", {
@@ -162,16 +142,12 @@ export const SIGNAL_DIRECTIONS = ["accelerating", "decelerating", "neutral"] as 
 export const insertSignalSchema = createInsertSchema(signals, {
   direction: z.enum(SIGNAL_DIRECTIONS),
 }).omit({ id: true });
-export const insertMilestoneSchema = createInsertSchema(milestones);
-export const insertPresetSchema = createInsertSchema(presets);
 export const insertModelReleaseSchema = createInsertSchema(modelReleases);
 export const insertCalibrationResidualSchema = createInsertSchema(calibrationResiduals).omit({ id: true });
 export const insertBacktestRunSchema = createInsertSchema(backtestRuns);
 
 export type Signal = typeof signals.$inferSelect;
 export type InsertSignal = z.infer<typeof insertSignalSchema>;
-export type Milestone = typeof milestones.$inferSelect;
-export type Preset = typeof presets.$inferSelect;
 export type ForecastHistoryRow = typeof forecastHistory.$inferSelect;
 export type ModelRelease = typeof modelReleases.$inferSelect;
 export type InsertModelRelease = z.infer<typeof insertModelReleaseSchema>;

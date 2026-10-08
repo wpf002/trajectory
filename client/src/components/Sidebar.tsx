@@ -19,9 +19,10 @@ import {
   BookOpen,
   Database,
 } from "lucide-react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { WatchlistItem } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
-import { PRESETS } from "../../../shared/model";
+import { PRESETS, computeScenarioProbabilities } from "../../../shared/model";
 import { useTrajectoryStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -118,6 +119,14 @@ export function Sidebar({ open, onClose, onShowShortcuts }: SidebarProps) {
     correlationStrength,
     setCorrelationStrength,
   } = useTrajectoryStore();
+  // Alerts crossed by the news forecast (not by a what-if on the sliders).
+  const newsBaseline = useTrajectoryStore(st => st.newsBaseline);
+  const { data: alerts = [] } = useQuery<WatchlistItem[]>({ queryKey: ["/api/watchlist"] });
+  const crossedCount = (() => {
+    if (!newsBaseline || alerts.length === 0) return 0;
+    const p = Object.fromEntries(computeScenarioProbabilities(newsBaseline).map(x => [x.id, x.probability * 100]));
+    return alerts.filter(a => a.op === "gt" ? p[a.scenarioId] >= a.thresholdPct : p[a.scenarioId] <= a.thresholdPct).length;
+  })();
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [resetScope, setResetScope] = useState<"drivers" | "signals" | "history" | "all">("drivers");
   const qc = useQueryClient();
@@ -226,6 +235,11 @@ export function Sidebar({ open, onClose, onShowShortcuts }: SidebarProps) {
                 >
                   <Icon className="w-4 h-4" />
                   <span className="flex-1">{item.label}</span>
+                  {item.href === "/watchlist" && crossedCount > 0 && (
+                    <span className="text-[11px] font-mono tabular-nums px-2 rounded-full bg-accent text-accent-foreground" title={`${crossedCount} alert${crossedCount === 1 ? "" : "s"} crossed`}>
+                      {crossedCount}
+                    </span>
+                  )}
                   {active && <div className="w-1 h-4 bg-sidebar-primary rounded-full" />}
                 </div>
               </Link>

@@ -181,4 +181,40 @@ test("watchlist reports a crossed threshold and ignores an uncrossed one", async
   const hits = data.triggered.filter((t: any) => t.scenarioId === top.id);
   assert.equal(hits.length, 1);
   assert.equal(hits[0].op, "gt");
+  assert.equal(hits[0].newlyTriggered, true);
+
+  // The crossing time is stored, and a second evaluation doesn't re-fire it.
+  const stored = (await api("GET", "/api/watchlist")).data.find((w: any) => w.id === hits[0].id);
+  assert.equal(stored.lastTriggeredAt, hits[0].lastTriggeredAt);
+  const again = (await api("POST", "/api/watchlist/evaluate", {})).data.triggered.find((t: any) => t.id === hits[0].id);
+  assert.equal(again.newlyTriggered, false);
+  assert.equal(again.lastTriggeredAt, hits[0].lastTriggeredAt);
+
+  // An alert that isn't crossed stays unset.
+  const uncrossed = (await api("GET", "/api/watchlist")).data.find((w: any) => w.op === "lt");
+  assert.equal(uncrossed.lastTriggeredAt, null);
+});
+
+test("portfolio holdings: create, update, delete", async () => {
+  const created = (await api("POST", "/api/holdings", {
+    label: "NVDA", weightPct: 20, scenarioSensitivities: JSON.stringify({ oligarchic_capture: 0.6 }),
+  })).data;
+  assert.equal(created.label, "NVDA");
+  const patched = (await api("PATCH", `/api/holdings/${created.id}`, { weightPct: 30 })).data;
+  assert.equal(patched.weightPct, 30);
+  await api("DELETE", `/api/holdings/${created.id}`);
+  const list = (await api("GET", "/api/holdings")).data;
+  assert.ok(!list.some((h: any) => h.id === created.id));
+});
+
+test("a decision snapshots the current news forecast and takes a bounded review score", async () => {
+  const probs = (await api("GET", "/api/probabilities")).data.probabilities;
+  const d = (await api("POST", "/api/decisions", { title: "Hedge", body: "Bought puts" })).data;
+  const snap = JSON.parse(d.probsAtDecision);
+  for (const p of probs) assert.ok(Math.abs(snap[p.id] - p.probability) < 1e-12);
+
+  const reviewed = (await api("PATCH", `/api/decisions/${d.id}`, { outcome: "fine", outcomeScore: 0.5 })).data;
+  assert.equal(reviewed.outcomeScore, 0.5);
+  const bad = await api("PATCH", `/api/decisions/${d.id}`, { outcomeScore: 5 });
+  assert.equal(bad.status, 400);
 });

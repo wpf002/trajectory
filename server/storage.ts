@@ -1,7 +1,5 @@
 import {
   signals,
-  milestones,
-  presets,
   forecastHistory,
   modelReleases,
   calibrationResiduals,
@@ -13,8 +11,6 @@ import {
 import type {
   Signal,
   InsertSignal,
-  Milestone,
-  Preset,
   ForecastHistoryRow,
   ModelRelease,
   InsertModelRelease,
@@ -66,24 +62,6 @@ CREATE TABLE IF NOT EXISTS forecast_history (
   timestamp INTEGER NOT NULL,
   driver_snapshot TEXT NOT NULL,
   trigger_signal_id INTEGER
-);
-CREATE TABLE IF NOT EXISTS milestones (
-  id TEXT PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT NOT NULL,
-  category TEXT NOT NULL,
-  median_year REAL NOT NULL,
-  p10_year REAL NOT NULL,
-  p90_year REAL NOT NULL,
-  drivers TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending'
-);
-CREATE TABLE IF NOT EXISTS presets (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  driver_values TEXT NOT NULL,
-  is_built_in INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS model_releases (
   id TEXT PRIMARY KEY,
@@ -171,6 +149,16 @@ ensureColumn("signals", "cluster_key", "TEXT");
 ensureColumn("signals", "event_date", "INTEGER");
 ensureColumn("signals", "pinned", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("calibration_residuals", "crowd_source", "TEXT NOT NULL DEFAULT 'snapshot'");
+
+// milestones and presets were created at boot but never read or written —
+// milestones are computed by forecastMilestones(), presets are PRESETS in
+// shared/model.ts. Drop them on existing installs, only while still empty.
+for (const t of ["milestones", "presets"]) {
+  const exists = sqlite.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(t);
+  if (exists && (sqlite.prepare(`SELECT COUNT(*) c FROM ${t}`).get() as { c: number }).c === 0) {
+    sqlite.exec(`DROP TABLE ${t}`);
+  }
+}
 
 export const db = drizzle(sqlite);
 
@@ -286,6 +274,9 @@ export const storage = {
   },
   addWatchlist(w: InsertWatchlistItem): WatchlistItem {
     return db.insert(watchlistItems).values(w).returning().get();
+  },
+  setWatchlistTriggered(id: number, at: number | null) {
+    db.update(watchlistItems).set({ lastTriggeredAt: at }).where(eq(watchlistItems.id, id)).run();
   },
   deleteWatchlist(id: number) {
     return db.delete(watchlistItems).where(eq(watchlistItems.id, id)).run();
