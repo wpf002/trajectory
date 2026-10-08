@@ -108,11 +108,11 @@ export default function Watchlist() {
             <Bell className="w-5 h-5" /> Watchlist alerts
           </h1>
           <p className="text-sm text-muted-foreground max-w-2xl mt-1">
-            Pin a scenario probability threshold — you'll get an in-app notification when the daily forecast crosses it. The recurring task checks every day.
+            Set a threshold on a scenario. Crossed alerts show here.
           </p>
         </div>
         <Button onClick={() => checkMut.mutate()} disabled={checkMut.isPending} data-testid="button-check-now">
-          <Zap className="w-4 h-4 mr-1.5" /> Check now
+          <Zap className="w-4 h-4 mr-2" /> Check now
         </Button>
       </div>
 
@@ -189,7 +189,7 @@ export default function Watchlist() {
         <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
           <CardTitle className="text-sm font-semibold">Active alerts ({list.length})</CardTitle>
           {evalQ.data && (
-            <Badge variant="outline" className="text-[10px] font-mono">
+            <Badge variant="outline" className="text-[11px] font-mono">
               {(evalQ.data.triggered.length)} currently triggered
             </Badge>
           )}
@@ -225,7 +225,7 @@ export default function Watchlist() {
                         </span>
                       </div>
                       {w.note && <div className="text-xs text-muted-foreground truncate">{w.note}</div>}
-                      <div className="text-[10px] font-mono text-muted-foreground mt-0.5 flex items-center gap-3">
+                      <div className="text-[11px] font-mono text-muted-foreground mt-1 flex items-center gap-3">
                         <span>Current: <strong className={isTriggered ? "text-accent" : "text-foreground"}>{cur.toFixed(1)}%</strong></span>
                         <span className="flex items-center gap-1"><Clock className="w-2.5 h-2.5" /> Last fire: {fmtWhen(w.lastTriggeredAt)}</span>
                       </div>
@@ -252,7 +252,7 @@ export default function Watchlist() {
       <Card>
         <CardContent className="pt-4">
           <div className="text-xs text-muted-foreground">
-            <strong className="text-foreground">How it works.</strong> The daily recurring task ingests fresh news, recomputes scenario probabilities, and checks each alert. If a threshold is crossed the app sends you an in-app notification with the driving headlines. Debounce: 20 hours between repeat fires per alert.
+            Alerts are checked against the current forecast each time the collectors run.
           </div>
         </CardContent>
       </Card>

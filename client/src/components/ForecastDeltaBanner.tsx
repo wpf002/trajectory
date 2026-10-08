@@ -31,8 +31,8 @@ export function ForecastDeltaBanner() {
 
   const up = leader.deltaDay >= 0;
   const Arrow = up ? ArrowUp : ArrowDown;
-  const deltaColor = up ? "text-emerald-500" : "text-rose-500";
-  const deltaBg = up ? "bg-emerald-500/10 border-emerald-500/30" : "bg-rose-500/10 border-rose-500/30";
+  const deltaColor = up ? "text-positive" : "text-negative";
+  const deltaBg = up ? "bg-positive/10 border-positive/30" : "bg-negative/10 border-negative/30";
 
   return (
     <div
@@ -40,20 +40,20 @@ export function ForecastDeltaBanner() {
       data-testid="banner-forecast-delta"
     >
       <Clock className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-      <span className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground shrink-0">
+      <span className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground shrink-0">
         Biggest 1-day move
       </span>
       <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: scenario.color }} />
       <span className="text-xs font-semibold truncate" data-testid="banner-delta-scenario">
         {scenario.name}
       </span>
-      <div className={`flex items-center gap-0.5 font-mono tabular-nums text-xs shrink-0 ${deltaColor}`}>
+      <div className={`flex items-center gap-1 font-mono tabular-nums text-xs shrink-0 ${deltaColor}`}>
         <Arrow className="w-3 h-3" />
         <span data-testid="banner-delta-value">
           {up ? "+" : ""}{leader.deltaDay.toFixed(1)}pp
         </span>
       </div>
-      <span className="text-[10px] font-mono text-muted-foreground shrink-0 ml-auto">
+      <span className="text-[11px] font-mono text-muted-foreground shrink-0 ml-auto">
         now {(leader.current * 100).toFixed(1)}%
       </span>
     </div>

@@ -18,18 +18,18 @@ export function DriftChip({ deltaPP, label = "1d", className = "" }: DriftChipPr
   const color = neutral
     ? "text-muted-foreground bg-muted/30 border-border/50"
     : positive
-    ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/30"
-    : "text-rose-500 bg-rose-500/10 border-rose-500/30";
+    ? "text-positive bg-positive/10 border-positive/30"
+    : "text-negative bg-negative/10 border-negative/30";
 
   return (
     <span
-      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-mono border tabular-nums ${color} ${className}`}
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-mono border tabular-nums ${color} ${className}`}
       title={`${positive ? "+" : ""}${deltaPP.toFixed(1)}pp change ${label}`}
     >
       <Icon className="w-2.5 h-2.5" />
       {positive && !neutral ? "+" : ""}
       {deltaPP.toFixed(1)}
-      <span className="text-muted-foreground ml-0.5">{label}</span>
+      <span className="text-muted-foreground ml-1">{label}</span>
     </span>
   );
 }

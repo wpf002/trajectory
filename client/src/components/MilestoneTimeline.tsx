@@ -3,13 +3,13 @@ import { Card } from "@/components/ui/card";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
 const CATEGORY_COLORS: Record<string, string> = {
-  "AI Capability": "#60a5fa",
-  "Labor": "#f59e0b",
-  "Economics": "#34d399",
-  "Governance": "#a78bfa",
-  "AI Access": "#22d3ee",
-  "Biotech": "#f472b6",
-  "Risk": "#ef4444",
+  "AI Capability": "hsl(var(--info))",
+  "Labor": "hsl(var(--warning))",
+  "Economics": "hsl(var(--positive))",
+  "Governance": "hsl(var(--chart-4))",
+  "AI Access": "hsl(var(--chart-6))",
+  "Biotech": "hsl(var(--chart-7))",
+  "Risk": "hsl(var(--negative))",
 };
 
 export function MilestoneTimeline() {
@@ -30,11 +30,9 @@ export function MilestoneTimeline() {
   return (
     <Card className="p-4 border-border/50">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
-          Milestone Forecasts
-        </div>
-        <div className="text-[10px] text-muted-foreground font-mono">
-          median · 80% CI band
+        <h2 className="text-sm font-semibold">Milestones</h2>
+        <div className="text-[11px] text-muted-foreground font-mono">
+          median · 80% range
         </div>
       </div>
 
@@ -50,7 +48,7 @@ export function MilestoneTimeline() {
                 style={{ left: `${pct}%`, transform: "translateX(-50%)" }}
               >
                 <div className="h-2 w-px bg-border" />
-                <span className="text-[10px] font-mono text-muted-foreground mt-0.5">{y}</span>
+                <span className="text-[11px] font-mono text-muted-foreground mt-1">{y}</span>
               </div>
             );
           })}
@@ -62,7 +60,7 @@ export function MilestoneTimeline() {
             const p10Pct = ((m.p10Year - currentYear) / range) * 100;
             const p50Pct = ((m.medianYear - currentYear) / range) * 100;
             const p90Pct = ((m.p90Year - currentYear) / range) * 100;
-            const color = CATEGORY_COLORS[m.category] ?? "#94a3b8";
+            const color = CATEGORY_COLORS[m.category] ?? "hsl(var(--muted-foreground))";
 
             return (
               <HoverCard key={m.id} openDelay={100}>
@@ -103,20 +101,20 @@ export function MilestoneTimeline() {
                   <div className="text-muted-foreground mb-2">{m.description}</div>
                   <div className="grid grid-cols-3 gap-2 mt-2 pt-2 border-t border-border">
                     <div>
-                      <div className="text-[10px] uppercase text-muted-foreground">P10 (early)</div>
+                      <div className="text-[11px] uppercase text-muted-foreground">P10 (early)</div>
                       <div className="font-mono tabular">{m.p10Year.toFixed(0)}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase text-muted-foreground">Median</div>
+                      <div className="text-[11px] uppercase text-muted-foreground">Median</div>
                       <div className="font-mono tabular font-semibold" style={{ color }}>{m.medianYear.toFixed(0)}</div>
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase text-muted-foreground">P90 (late)</div>
+                      <div className="text-[11px] uppercase text-muted-foreground">P90 (late)</div>
                       <div className="font-mono tabular">{m.p90Year.toFixed(0)}</div>
                     </div>
                   </div>
                   <div className="mt-2 pt-2 border-t border-border">
-                    <div className="text-[10px] uppercase text-muted-foreground">Depends on</div>
+                    <div className="text-[11px] uppercase text-muted-foreground">Depends on</div>
                     <div className="text-xs">{m.dependsOn.map(d => d.replace(/_/g, " ")).join(", ")}</div>
                   </div>
                 </HoverCardContent>

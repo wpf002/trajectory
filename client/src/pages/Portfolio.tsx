@@ -140,22 +140,22 @@ export default function Portfolio() {
         <CardContent className="pt-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Holdings</div>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Holdings</div>
               <div className="text-2xl font-semibold" data-testid="text-holding-count">{list.length}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Total weight</div>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Total weight</div>
               <div className="text-2xl font-semibold">{totalWeight.toFixed(0)}%</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Expected sensitivity</div>
-              <div className={`text-2xl font-semibold flex items-center gap-1 ${expectedValue > 0 ? "text-emerald-500" : expectedValue < 0 ? "text-rose-500" : ""}`}>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Expected sensitivity</div>
+              <div className={`text-2xl font-semibold flex items-center gap-1 ${expectedValue > 0 ? "text-positive" : expectedValue < 0 ? "text-negative" : ""}`}>
                 {expectedValue > 0 ? <TrendingUp className="w-5 h-5" /> : expectedValue < 0 ? <TrendingDown className="w-5 h-5" /> : null}
                 {expectedValue.toFixed(2)}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Interpretation</div>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Interpretation</div>
               <div className="text-sm mt-1 leading-tight">
                 {expectedValue > 0.15 ? "Portfolio is aligned with current scenario mix." :
                  expectedValue < -0.15 ? "Portfolio is misaligned — expected drag." :
@@ -181,17 +181,17 @@ export default function Portfolio() {
                 </div>
                 <div className="col-span-2 text-xs font-mono text-muted-foreground">P = {(r.prob * 100).toFixed(1)}%</div>
                 <div className="col-span-2 text-xs font-mono">
-                  Sens: <span className={r.avgSens > 0 ? "text-emerald-500" : r.avgSens < 0 ? "text-rose-500" : ""}>{r.avgSens > 0 ? "+" : ""}{r.avgSens.toFixed(2)}</span>
+                  Sens: <span className={r.avgSens > 0 ? "text-positive" : r.avgSens < 0 ? "text-negative" : ""}>{r.avgSens > 0 ? "+" : ""}{r.avgSens.toFixed(2)}</span>
                 </div>
                 <div className="col-span-4">
                   <div className="h-2 bg-muted rounded-full overflow-hidden relative">
                     <div
-                      className={`h-full absolute top-0 ${r.contribution >= 0 ? "bg-emerald-500 left-1/2" : "bg-rose-500 right-1/2"}`}
+                      className={`h-full absolute top-0 ${r.contribution >= 0 ? "bg-positive left-1/2" : "bg-negative right-1/2"}`}
                       style={{ width: `${Math.min(50, Math.abs(r.contribution * 100))}%` }}
                     />
                     <div className="absolute inset-y-0 left-1/2 w-px bg-border" />
                   </div>
-                  <div className="text-[10px] font-mono text-muted-foreground mt-0.5 text-right">
+                  <div className="text-[11px] font-mono text-muted-foreground mt-1 text-right">
                     Contribution: {r.contribution >= 0 ? "+" : ""}{r.contribution.toFixed(3)}
                   </div>
                 </div>
@@ -277,7 +277,7 @@ export default function Portfolio() {
                         {h.notes && <div className="text-xs text-muted-foreground truncate">{h.notes}</div>}
                       </div>
                       <Badge variant="outline" className="font-mono">{h.weightPct.toFixed(0)}%</Badge>
-                      <div className={`text-xs font-mono ${impact > 0 ? "text-emerald-500" : impact < 0 ? "text-rose-500" : ""}`}>
+                      <div className={`text-xs font-mono ${impact > 0 ? "text-positive" : impact < 0 ? "text-negative" : ""}`}>
                         EV: {impact > 0 ? "+" : ""}{impact.toFixed(2)}
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => delMut.mutate(h.id)} data-testid={`button-delete-holding-${h.id}`}>
@@ -291,12 +291,12 @@ export default function Portfolio() {
                           <div key={sc.id} className="text-center">
                             <div className="h-8 bg-muted rounded relative overflow-hidden">
                               <div
-                                className={`absolute inset-y-0 ${s >= 0 ? "bg-emerald-500/60 left-1/2" : "bg-rose-500/60 right-1/2"}`}
+                                className={`absolute inset-y-0 ${s >= 0 ? "bg-positive/60 left-1/2" : "bg-negative/60 right-1/2"}`}
                                 style={{ width: `${Math.min(50, Math.abs(s) * 50)}%` }}
                               />
                               <div className="absolute inset-y-0 left-1/2 w-px bg-border/40" />
                             </div>
-                            <div className="text-[9px] font-mono text-muted-foreground mt-0.5 truncate" title={sc.name}>
+                            <div className="text-[11px] font-mono text-muted-foreground mt-1 truncate" title={sc.name}>
                               {sc.name.split(" ")[0]}
                             </div>
                           </div>
@@ -336,7 +336,7 @@ export default function Portfolio() {
                   <div className="flex items-center gap-2 mb-1">
                     <div className="w-1.5 h-4 rounded-full" style={{ backgroundColor: sc?.color }} />
                     <div className="text-sm font-medium">{sc?.name}</div>
-                    <Badge variant="outline" className="ml-auto font-mono text-[10px]">{(prob * 100).toFixed(0)}%</Badge>
+                    <Badge variant="outline" className="ml-auto font-mono text-[11px]">{(prob * 100).toFixed(0)}%</Badge>
                   </div>
                   <div className="text-xs text-muted-foreground">{row.implication}</div>
                 </div>

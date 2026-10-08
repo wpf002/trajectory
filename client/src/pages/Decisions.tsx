@@ -81,7 +81,7 @@ export default function Decisions() {
           <BookOpen className="w-5 h-5" /> Decision journal
         </h1>
         <p className="text-sm text-muted-foreground max-w-2xl mt-1">
-          Record decisions with the scenario probabilities you saw at the time. Reviews later measure whether your call was smart or lucky.
+          Log a decision with the forecast at the time. Review it later.
         </p>
       </div>
 
@@ -89,21 +89,21 @@ export default function Decisions() {
         <CardContent className="pt-4">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Decisions</div>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Decisions</div>
               <div className="text-2xl font-semibold">{list.length}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Reviewed</div>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Reviewed</div>
               <div className="text-2xl font-semibold">{reviewed.length}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Avg score</div>
-              <div className={`text-2xl font-semibold ${avgScore > 0 ? "text-emerald-500" : avgScore < 0 ? "text-rose-500" : ""}`}>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Avg score</div>
+              <div className={`text-2xl font-semibold ${avgScore > 0 ? "text-positive" : avgScore < 0 ? "text-negative" : ""}`}>
                 {reviewed.length > 0 ? (avgScore > 0 ? "+" : "") + avgScore.toFixed(2) : "—"}
               </div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Interpretation</div>
+              <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Interpretation</div>
               <div className="text-sm mt-1 leading-tight">
                 {reviewed.length === 0 ? "No reviews yet." : avgScore > 0.3 ? "Decisions holding up well." : avgScore < -0.3 ? "Systematic bias — worth reviewing." : "Neutral track record."}
               </div>
@@ -127,7 +127,7 @@ export default function Decisions() {
           </div>
           <div>
             <Label className="text-xs">Scenarios this decision presumes will play out</Label>
-            <div className="flex flex-wrap gap-1.5 mt-1">
+            <div className="flex flex-wrap gap-2 mt-1">
               {SCENARIOS.map((sc) => {
                 const on = tags.includes(sc.id);
                 return (
@@ -137,7 +137,7 @@ export default function Decisions() {
                     className={`text-xs px-2 py-1 rounded-full border transition-colors ${on ? "bg-accent text-accent-foreground border-accent" : "border-border hover:bg-muted"}`}
                     data-testid={`tag-${sc.id}`}
                   >
-                    <span className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle" style={{ backgroundColor: sc.color }} />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full mr-2 align-middle" style={{ backgroundColor: sc.color }} />
                     {sc.name}
                   </button>
                 );
@@ -201,13 +201,13 @@ function DecisionCard({ decision, onDelete, onReview }: {
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium">{decision.title}</div>
-          <div className="text-[10px] font-mono text-muted-foreground mt-0.5">
+          <div className="text-[11px] font-mono text-muted-foreground mt-1">
             Decided {fmtDate(decision.decidedAt)} · Review {decision.reviewAt ? fmtDate(decision.reviewAt) : "—"}
           </div>
         </div>
         {dueForReview && <Badge className="bg-accent text-accent-foreground">Due</Badge>}
         {decision.outcomeScore != null && (
-          <Badge variant="outline" className={decision.outcomeScore > 0 ? "text-emerald-500" : decision.outcomeScore < 0 ? "text-rose-500" : ""}>
+          <Badge variant="outline" className={decision.outcomeScore > 0 ? "text-positive" : decision.outcomeScore < 0 ? "text-negative" : ""}>
             Score: {decision.outcomeScore > 0 ? "+" : ""}{decision.outcomeScore.toFixed(2)}
           </Badge>
         )}
@@ -222,7 +222,7 @@ function DecisionCard({ decision, onDelete, onReview }: {
           {tags.map((tid) => {
             const sc = SCENARIOS.find((s) => s.id === tid);
             return sc ? (
-              <span key={tid} className="text-[10px] px-1.5 py-0.5 rounded-full border bg-muted/40">
+              <span key={tid} className="text-[11px] px-2 py-1 rounded-full border bg-muted/40">
                 <span className="inline-block w-1.5 h-1.5 rounded-full mr-1 align-middle" style={{ backgroundColor: sc.color }} />
                 {sc.name}
               </span>
@@ -231,21 +231,21 @@ function DecisionCard({ decision, onDelete, onReview }: {
         </div>
       )}
 
-      <div className="text-[10px] font-mono text-muted-foreground mb-1">Probabilities at decision time:</div>
+      <div className="text-[11px] font-mono text-muted-foreground mb-1">Probabilities at decision time:</div>
       <div className="grid grid-cols-6 gap-1">
         {SCENARIOS.map((sc) => (
           <div key={sc.id} className="text-center">
             <div className="h-1.5 rounded-full" style={{ backgroundColor: sc.color, opacity: 0.4 }}>
               <div className="h-full rounded-full" style={{ backgroundColor: sc.color, width: `${(probs[sc.id] ?? 0) * 100}%` }} />
             </div>
-            <div className="text-[9px] font-mono mt-0.5">{((probs[sc.id] ?? 0) * 100).toFixed(0)}%</div>
+            <div className="text-[11px] font-mono mt-1">{((probs[sc.id] ?? 0) * 100).toFixed(0)}%</div>
           </div>
         ))}
       </div>
 
       {decision.outcome && (
         <div className="mt-2 text-xs bg-muted/40 rounded p-2">
-          <div className="text-[10px] font-mono uppercase text-muted-foreground mb-0.5">Outcome</div>
+          <div className="text-[11px] font-mono uppercase text-muted-foreground mb-1">Outcome</div>
           {decision.outcome}
         </div>
       )}

@@ -15,20 +15,20 @@ export function OnboardingHint() {
       className="mb-3 p-3 rounded-lg border border-accent/30 bg-accent/5 flex items-start gap-3"
       data-testid="onboarding-hint"
     >
-      <Sparkles className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+      <Sparkles className="w-4 h-4 text-accent shrink-0 mt-1" />
       <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium mb-0.5">Welcome to Trajectory</div>
+        <div className="text-sm font-medium mb-1">Welcome to Trajectory</div>
         <div className="text-xs text-muted-foreground leading-relaxed">
           Drag <span className="text-foreground/80">drivers</span> on the left to see how they
           shift <span className="text-foreground/80">scenario probabilities</span>. Add news{" "}
           <span className="text-foreground/80">signals</span> to update the model. Try{" "}
-          <kbd className="px-1 py-0.5 rounded bg-muted/60 border border-border font-mono text-[9px]">?</kbd>{" "}
+          <kbd className="px-1 py-1 rounded bg-muted/60 border border-border font-mono text-[11px]">?</kbd>{" "}
           for keyboard shortcuts.
         </div>
       </div>
       <button
         onClick={() => setVisible(false)}
-        className="text-muted-foreground hover:text-foreground p-0.5 rounded"
+        className="text-muted-foreground hover:text-foreground p-1 rounded"
         data-testid="button-dismiss-onboarding"
         aria-label="Dismiss"
       >
@@ -65,25 +65,25 @@ export function ShortcutHelp({ onClose }: { onClose: () => void }) {
       data-testid="shortcut-help-overlay"
     >
       <div
-        className="max-w-sm w-full bg-card border border-border rounded-lg p-5 shadow-xl"
+        className="max-w-sm w-full bg-card border border-border rounded-lg p-6 shadow-xl"
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
           <div className="text-sm font-semibold">Keyboard shortcuts</div>
           <button
             onClick={onClose}
-            className="text-muted-foreground hover:text-foreground p-0.5"
+            className="text-muted-foreground hover:text-foreground p-1"
             data-testid="button-close-shortcut-help"
             aria-label="Close"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {shortcuts.map(([key, label]) => (
-            <div key={key} className="flex items-center justify-between text-xs py-0.5">
+            <div key={key} className="flex items-center justify-between text-xs py-1">
               <span className="text-foreground/80">{label}</span>
-              <kbd className="px-1.5 py-0.5 rounded bg-muted/60 border border-border font-mono text-[10px]">
+              <kbd className="px-2 py-1 rounded bg-muted/60 border border-border font-mono text-[11px]">
                 {key}
               </kbd>
             </div>

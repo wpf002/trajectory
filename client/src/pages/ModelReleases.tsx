@@ -11,15 +11,15 @@ import { useToast } from "@/hooks/use-toast";
 function statusBadge(status: string) {
   switch (status) {
     case "released":
-      return { label: "Released", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" };
+      return { label: "Released", cls: "bg-positive/10 text-positive border-positive/30" };
     case "confirmed":
-      return { label: "Confirmed", cls: "bg-blue-500/10 text-blue-500 border-blue-500/30" };
+      return { label: "Confirmed", cls: "bg-info/10 text-info border-info/30" };
     case "rumored":
-      return { label: "Rumored", cls: "bg-amber-500/10 text-amber-500 border-amber-500/30" };
+      return { label: "Rumored", cls: "bg-warning/10 text-warning border-warning/30" };
     case "delayed":
-      return { label: "Delayed", cls: "bg-orange-500/10 text-orange-500 border-orange-500/30" };
+      return { label: "Delayed", cls: "bg-warning/10 text-warning border-warning/30" };
     case "cancelled":
-      return { label: "Cancelled", cls: "bg-rose-500/10 text-rose-500 border-rose-500/30" };
+      return { label: "Cancelled", cls: "bg-negative/10 text-negative border-negative/30" };
     default:
       return { label: status, cls: "bg-muted/30 text-muted-foreground" };
   }
@@ -72,11 +72,11 @@ export default function ModelReleases() {
   }
 
   return (
-    <div className="p-3 sm:p-5 space-y-4 max-w-[1400px] mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 max-w-[1400px] mx-auto">
       <div className="pb-2 border-b border-border flex items-start justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-xl font-semibold tracking-tight" data-testid="page-title">Model Releases</h1>
-          <div className="text-xs text-muted-foreground font-mono mt-0.5">
+          <div className="text-xs text-muted-foreground font-mono mt-1">
             Per-model release tracking · rumored → confirmed → released
           </div>
         </div>
@@ -122,10 +122,10 @@ export default function ModelReleases() {
             return (
               <Card key={status} className="p-4">
                 <div className="flex items-center gap-2 mb-3">
-                  <Badge variant="outline" className={`text-[10px] font-mono uppercase tracking-wider ${b.cls}`}>
+                  <Badge variant="outline" className={`text-[11px] font-mono uppercase tracking-wider ${b.cls}`}>
                     {b.label}
                   </Badge>
-                  <span className="text-[10px] font-mono text-muted-foreground">{items.length} model(s)</span>
+                  <span className="text-[11px] font-mono text-muted-foreground">{items.length} model(s)</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {items.map(m => {
@@ -138,29 +138,29 @@ export default function ModelReleases() {
                         <div className="flex items-start justify-between gap-2 mb-1">
                           <div>
                             <div className="text-sm font-semibold">{m.name}</div>
-                            <div className="text-[10px] font-mono text-muted-foreground">{m.lab}</div>
+                            <div className="text-[11px] font-mono text-muted-foreground">{m.lab}</div>
                           </div>
                           {typeof m.capabilityDelta === "number" && (
                             <div className="text-right">
-                              <div className="text-[9px] uppercase tracking-wider font-mono text-muted-foreground">Δ capability</div>
+                              <div className="text-[11px] uppercase tracking-wider font-mono text-muted-foreground">Δ capability</div>
                               <div className="text-xs font-mono text-accent">+{(m.capabilityDelta * 100).toFixed(0)}%</div>
                             </div>
                           )}
                         </div>
                         {(m.releaseDate || m.predictedReleaseP50) && (
-                          <div className="text-[10px] font-mono text-muted-foreground mt-1">
+                          <div className="text-[11px] font-mono text-muted-foreground mt-1">
                             {m.releaseDate
                               ? <>Released <span className="text-foreground">{fmtDate(m.releaseDate)}</span></>
                               : <>Predicted <span className="text-foreground">{fmtRange(m.predictedReleaseP10, m.predictedReleaseP50, m.predictedReleaseP90)}</span> (p10 · p50 · p90)</>}
                           </div>
                         )}
                         {m.notes && (
-                          <div className="text-xs text-muted-foreground mt-1.5 leading-snug">{m.notes}</div>
+                          <div className="text-xs text-muted-foreground mt-2 leading-snug">{m.notes}</div>
                         )}
                         {Object.keys(benchmarks).length > 0 && (
                           <div className="flex flex-wrap gap-1 mt-2">
                             {Object.entries(benchmarks).map(([k, v]) => (
-                              <Badge key={k} variant="outline" className="text-[9px] font-mono">
+                              <Badge key={k} variant="outline" className="text-[11px] font-mono">
                                 {k.replace(/_/g, " ")} {(v * 100).toFixed(0)}%
                               </Badge>
                             ))}
@@ -174,7 +174,7 @@ export default function ModelReleases() {
                                 href={url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-[10px] font-mono text-muted-foreground hover:text-accent flex items-center gap-0.5"
+                                className="text-[11px] font-mono text-muted-foreground hover:text-accent flex items-center gap-1"
                               >
                                 source <ExternalLink className="w-2.5 h-2.5" />
                               </a>

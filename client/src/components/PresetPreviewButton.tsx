@@ -30,21 +30,18 @@ export function PresetPreviewButton({ preset, onApply, currentValues }: PresetPr
           onClick={onApply}
           onFocus={() => setShowDiff(true)}
           onBlur={() => setShowDiff(false)}
-          className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-sidebar-accent/50 transition-colors group"
+          className="w-full text-left px-2 py-2 rounded text-xs hover:bg-sidebar-accent/50 transition-colors group"
           data-testid={`preset-${preset.id}`}
         >
           <div className="flex items-center justify-between">
             <span>{preset.name}</span>
-            <span className="text-[9px] font-mono text-sidebar-foreground/40 group-hover:text-sidebar-foreground/70 transition-colors">
-              hover ▸
-            </span>
           </div>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="right" className="w-72 text-xs">
         <div className="font-medium mb-1">{preset.name}</div>
         <div className="text-muted-foreground mb-3 text-[11px] leading-relaxed">{preset.description}</div>
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono mb-1.5">
+        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono mb-2">
           Predicted scenario probabilities
         </div>
         <div className="space-y-1">
@@ -64,8 +61,8 @@ export function PresetPreviewButton({ preset, onApply, currentValues }: PresetPr
                 </span>
                 {Math.abs(delta) >= 0.5 && (
                   <span
-                    className={`font-mono text-[9px] tabular-nums w-8 text-right ${
-                      delta > 0 ? "text-emerald-500" : "text-rose-500"
+                    className={`font-mono text-[11px] tabular-nums w-8 text-right ${
+                      delta > 0 ? "text-positive" : "text-negative"
                     }`}
                   >
                     {delta > 0 ? "+" : ""}
@@ -76,7 +73,7 @@ export function PresetPreviewButton({ preset, onApply, currentValues }: PresetPr
             );
           })}
         </div>
-        <div className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border">
+        <div className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
           Click to apply
         </div>
       </HoverCardContent>

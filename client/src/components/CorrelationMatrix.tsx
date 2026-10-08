@@ -23,10 +23,8 @@ export function CorrelationMatrix() {
   return (
     <Card className="p-4 border-border/50">
       <div className="flex items-center justify-between mb-3">
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
-          Driver Correlations
-        </div>
-        <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground">
+        <h2 className="text-sm font-semibold">Driver correlations</h2>
+        <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
           <div className="flex items-center gap-1">
             <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "hsla(0, 72%, 55%, 0.8)" }} />
             <span>−</span>
@@ -39,13 +37,13 @@ export function CorrelationMatrix() {
       </div>
 
       {hoveredRow && (
-        <div className="text-[10px] font-mono text-muted-foreground mb-2 truncate" data-testid="corr-hovered-label">
+        <div className="text-[11px] font-mono text-muted-foreground mb-2 truncate" data-testid="corr-hovered-label">
           <span className="text-accent">▸</span> {drivers.find(d => d.id === hoveredRow)?.label}
         </div>
       )}
 
       <div className="overflow-x-auto">
-        <table className="text-[10px] font-mono">
+        <table className="text-[11px] font-mono">
           <thead>
             <tr>
               <th className="p-1"></th>
@@ -100,7 +98,7 @@ export function CorrelationMatrix() {
                           {v !== 0 && (
                             <HoverCardContent className="text-xs w-64">
                               <div className="font-medium">{rowD.label} → {colD.label}</div>
-                              <div className="font-mono text-xs mt-1" style={{ color: v > 0 ? "#34d399" : "#f87171" }}>
+                              <div className="font-mono text-xs mt-1" style={{ color: v > 0 ? "hsl(var(--positive))" : "hsl(var(--negative))" }}>
                                 {v > 0 ? "+" : ""}{v.toFixed(2)}
                               </div>
                               <div className="text-muted-foreground text-xs mt-1">

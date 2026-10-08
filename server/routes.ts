@@ -443,7 +443,13 @@ export async function registerRoutes(
   app.get("/api/probabilities", async (_req, res) => {
     const values = computeCurrentDrivers();
     const probs = computeScenarioProbabilities(values);
-    res.json({ driverValues: values, probabilities: probs });
+    const applied = storage.listSignals(1000).filter(s => s.sourceTier !== "rejected");
+    res.json({
+      driverValues: values,
+      probabilities: probs,
+      signalCount: applied.length,
+      asOf: applied.reduce<number | null>((m, s) => (m === null || s.timestamp > m ? s.timestamp : m), null),
+    });
   });
 
   // ---- Ingest (batch, cron entry point) ----

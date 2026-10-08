@@ -17,7 +17,7 @@ interface ScenarioProbabilityProps {
 export function ScenarioProbability({ compareBaseline = false, baselineProbs }: ScenarioProbabilityProps) {
   const { driverValues } = useTrajectoryStore();
   const probs = computeScenarioProbabilities(driverValues);
-  const [expanded, setExpanded] = useState<string | null>(probs.sort((a, b) => b.probability - a.probability)[0].id);
+  const [expanded, setExpanded] = useState<string | null>(null);
 
   const { data: drift } = useForecastDrift();
 
@@ -77,23 +77,12 @@ export function ScenarioProbability({ compareBaseline = false, baselineProbs }: 
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <div className="font-medium text-sm">{scenario.name}</div>
-                        {seriesValues.length >= 2 && (
-                          <Sparkline
-                            values={seriesValues}
-                            color={scenario.color}
-                            width={50}
-                            height={14}
-                          />
-                        )}
-                        {d && Math.abs(d.deltaDay) >= 0.3 && (
-                          <DriftChip deltaPP={d.deltaDay} label="1d" />
-                        )}
                         {shiftFromBaseline !== null && Math.abs(shiftFromBaseline) >= 0.2 && (
                           <span
-                            className={`text-[10px] font-mono px-1 py-0.5 rounded tabular-nums ${
-                              shiftFromBaseline > 0 ? "text-emerald-500 bg-emerald-500/10" : "text-rose-500 bg-rose-500/10"
+                            className={`text-[11px] font-mono px-1 rounded tabular-nums ${
+                              shiftFromBaseline > 0 ? "text-positive bg-positive/10" : "text-negative bg-negative/10"
                             }`}
-                            title="Δ vs baseline drivers"
+                            title="Change from the news forecast"
                           >
                             {shiftFromBaseline > 0 ? "+" : ""}
                             {shiftFromBaseline.toFixed(1)}
@@ -104,7 +93,7 @@ export function ScenarioProbability({ compareBaseline = false, baselineProbs }: 
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono tabular-nums text-lg font-semibold" style={{ color: scenario.color }}>
+                    <span className="font-mono tabular-nums text-xl font-semibold">
                       {pct.toFixed(1)}%
                     </span>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -114,30 +103,22 @@ export function ScenarioProbability({ compareBaseline = false, baselineProbs }: 
             </button>
             {isExpanded && (
               <div className="px-4 pb-4 pt-1 space-y-3 border-t border-border/50">
-                <p className="text-sm text-muted-foreground leading-relaxed">{scenario.narrativeLong}</p>
+                <p className="text-sm text-muted-foreground leading-relaxed max-w-[68ch]">{scenario.narrativeShort}</p>
                 <ScenarioAttribution scenarioId={scenario.id} driverValues={driverValues} />
                 {d && d.series.length >= 5 && (
-                  <div className="pt-2">
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1 font-mono flex items-center justify-between">
-                      <span>Probability drift · last {Math.min(30, d.series.length)}d</span>
-                      <span className="font-mono tabular-nums">
-                        1d: {d.deltaDay > 0 ? "+" : ""}{d.deltaDay.toFixed(1)}pp · 7d: {d.deltaWeek > 0 ? "+" : ""}{d.deltaWeek.toFixed(1)}pp
-                      </span>
-                    </div>
-                    <Sparkline
-                      values={d.series.map(x => x.p)}
-                      color={scenario.color}
-                      width={280}
-                      height={32}
-                    />
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span>{Math.min(30, d.series.length)}d</span>
+                    <Sparkline values={d.series.map(x => x.p)} color={scenario.color} width={160} height={20} />
+                    <span className="font-mono tabular-nums">
+                      {d.deltaWeek > 0 ? "+" : ""}{d.deltaWeek.toFixed(1)}pp this week
+                    </span>
                   </div>
                 )}
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5 font-mono">Early Indicators to Watch</div>
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">Watch for</div>
                   <ul className="space-y-1">
                     {scenario.earlyIndicators.map((ind, i) => (
                       <li key={i} className="text-xs flex items-start gap-2">
-                        <span className="text-accent mt-1">▸</span>
                         <span className="text-foreground/80">{ind}</span>
                       </li>
                     ))}
@@ -176,15 +157,12 @@ function ScenarioAttribution({
     .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
 
   const maxAbs = Math.max(...contribs.map(c => Math.abs(c.contribution)), 0.001);
-  const top = contribs.slice(0, 6);
+  const top = contribs.slice(0, 4);
 
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5 font-mono flex items-center justify-between">
-        <span>Driver Attribution</span>
-        <span className="text-[9px] normal-case tracking-normal opacity-70">weight × (value − baseline)</span>
-      </div>
-      <div className="space-y-1.5">
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">Pushing it</div>
+      <div className="space-y-2">
         {top.map(c => {
           const pct = (Math.abs(c.contribution) / maxAbs) * 100;
           const favorable = c.contribution >= 0;
@@ -194,12 +172,9 @@ function ScenarioAttribution({
                 <span className="truncate min-w-0 flex-1 text-foreground/80" title={c.driverLabel}>
                   {c.driverLabel}
                 </span>
-                <span className="font-mono text-[10px] shrink-0 tabular-nums text-muted-foreground">
-                  w{c.weight > 0 ? "+" : ""}{c.weight.toFixed(1)} · v{(c.value * 100).toFixed(0)}
-                </span>
                 <span
-                  className={`font-mono text-[10px] shrink-0 tabular-nums w-14 text-right ${
-                    favorable ? "text-emerald-500" : "text-rose-500"
+                  className={`font-mono text-[11px] shrink-0 tabular-nums w-14 text-right ${
+                    favorable ? "text-positive" : "text-negative"
                   }`}
                 >
                   {favorable ? "+" : ""}{(c.contribution * 100).toFixed(1)}
@@ -208,7 +183,7 @@ function ScenarioAttribution({
               <div className="mt-1 h-1 rounded-full bg-muted/40 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
-                    favorable ? "bg-emerald-500/70" : "bg-rose-500/70"
+                    favorable ? "bg-positive/70" : "bg-negative/70"
                   }`}
                   style={{ width: `${pct}%` }}
                 />
@@ -216,9 +191,6 @@ function ScenarioAttribution({
             </div>
           );
         })}
-      </div>
-      <div className="text-[9px] font-mono text-muted-foreground/70 mt-2">
-        Green = lifting probability. Red = suppressing. Baseline value = 0.50.
       </div>
     </div>
   );
@@ -273,18 +245,18 @@ function ScenarioTopSignals({ scenarioId }: { scenarioId: string }) {
 
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5 font-mono">
-        Top Signals Driving This Scenario
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">
+        Recent signals
       </div>
       {ranked.length === 0 ? (
-        <div className="text-xs text-muted-foreground italic py-1">
-          No recorded signals materially affect this scenario yet. Add news to the Signals page.
+        <div className="text-xs text-muted-foreground py-1">
+          None yet.
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {ranked.map(({ signal, score, touched }) => {
             const Icon = score >= 0 ? ArrowUpRight : ArrowDownRight;
-            const color = score >= 0 ? "text-emerald-500" : "text-rose-500";
+            const color = score >= 0 ? "text-positive" : "text-negative";
             return (
               <div
                 key={signal.id}
@@ -295,20 +267,20 @@ function ScenarioTopSignals({ scenarioId }: { scenarioId: string }) {
                 }`}
                 data-testid={`scenario-signal-${scenarioId}-${signal.id}`}
               >
-                <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${color}`} />
+                <Icon className={`w-3 h-3 mt-1 shrink-0 ${color}`} />
                 <div className="min-w-0 flex-1">
-                  <div className="text-xs font-medium leading-tight line-clamp-2 flex items-center gap-1.5">
+                  <div className="text-xs font-medium leading-tight line-clamp-2 flex items-center gap-2">
                     {signal.pinned && <Pin className="w-2.5 h-2.5 text-accent shrink-0 fill-accent" />}
                     <span>{signal.title}</span>
                   </div>
-                  <div className="text-[10px] font-mono text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+                  <div className="text-[11px] font-mono text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
                     <span>{new Date(signal.timestamp * 1000).toLocaleDateString()}</span>
                     {signal.source.startsWith("http") ? (
                       <a
                         href={signal.source}
                         target="_blank"
                         rel="noreferrer"
-                        className="hover:text-accent flex items-center gap-0.5"
+                        className="hover:text-accent flex items-center gap-1"
                         onClick={e => e.stopPropagation()}
                       >
                         {signal.sourceDomain || "source"}
@@ -320,17 +292,17 @@ function ScenarioTopSignals({ scenarioId }: { scenarioId: string }) {
                     <span className="opacity-70">· {touched.length} driver{touched.length === 1 ? "" : "s"}</span>
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={e => { e.stopPropagation(); pinMutation.mutate({ id: signal.id, pinned: !signal.pinned }); }}
                     className={`transition-colors ${signal.pinned ? "text-accent" : "text-muted-foreground hover:text-foreground"}`}
-                    title={signal.pinned ? "Unpin from this scenario" : "Pin to keep at top of this scenario"}
+                    title={signal.pinned ? "Unpin" : "Pin to top"}
                     aria-label={signal.pinned ? "Unpin signal" : "Pin signal"}
                     data-testid={`pin-signal-${scenarioId}-${signal.id}`}
                   >
                     {signal.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}
                   </button>
-                  <span className={`font-mono text-[10px] tabular-nums ${color}`}>
+                  <span className={`font-mono text-[11px] tabular-nums ${color}`}>
                     {score > 0 ? "+" : ""}{(score * 100).toFixed(1)}
                   </span>
                 </div>

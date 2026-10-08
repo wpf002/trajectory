@@ -27,10 +27,10 @@ function EnsembleDelta({ ourProb, crowdProb }: { ourProb: number; crowdProb: num
   const Icon = delta > 0 ? TrendingUp : TrendingDown;
   return (
     <span
-      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-mono tabular-nums border ${
+      className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-mono tabular-nums border ${
         delta > 0
-          ? "text-emerald-500 bg-emerald-500/10 border-emerald-500/30"
-          : "text-rose-500 bg-rose-500/10 border-rose-500/30"
+          ? "text-positive bg-positive/10 border-positive/30"
+          : "text-negative bg-negative/10 border-negative/30"
       }`}
       title={`${delta > 0 ? "More" : "Less"} bullish than crowd by ${abs.toFixed(1)}pp`}
     >
@@ -70,47 +70,47 @@ export default function External() {
     : (metaculusAvg ?? manifoldAvg);
 
   return (
-    <div className="p-3 sm:p-5 space-y-4 max-w-[1400px] mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 max-w-[1400px] mx-auto">
       <div className="pb-2 border-b border-border">
         <h1 className="text-xl font-semibold tracking-tight" data-testid="page-title">External Forecasts</h1>
-        <div className="text-xs text-muted-foreground font-mono mt-0.5">
-          Metaculus + Manifold Markets · calibrated crowd predictions · ensemble with our model
+        <div className="text-xs text-muted-foreground font-mono mt-1">
+          Metaculus and Manifold crowd forecasts
         </div>
       </div>
 
       {/* Ensemble panel */}
       <Card className="p-4">
-        <div className="flex items-center gap-1.5 mb-3">
+        <div className="flex items-center gap-2 mb-3">
           <Globe2 className="w-3.5 h-3.5 text-accent" />
           <h2 className="text-sm font-semibold">Ensemble Signal</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Trajectory Model</div>
+            <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Trajectory Model</div>
             <div className="mt-1">
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: topScenario.color }} />
                 <div className="text-sm font-medium">{topScenario.name}</div>
               </div>
-              <div className="font-mono tabular-nums text-lg mt-0.5" style={{ color: topScenario.color }}>
+              <div className="font-mono tabular-nums text-xl mt-1" style={{ color: topScenario.color }}>
                 {(topOwn.probability * 100).toFixed(1)}%
               </div>
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Metaculus (avg)</div>
+            <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Metaculus (avg)</div>
             <div className="mt-1">
               <div className="text-sm font-medium">AGI questions</div>
-              <div className="font-mono tabular-nums text-lg mt-0.5 text-accent" data-testid="text-metaculus-avg">
+              <div className="font-mono tabular-nums text-xl mt-1 text-accent" data-testid="text-metaculus-avg">
                 {metaculusAvg !== null ? `${(metaculusAvg * 100).toFixed(1)}%` : "—"}
               </div>
             </div>
           </div>
           <div>
-            <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Manifold (avg)</div>
+            <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Manifold (avg)</div>
             <div className="mt-1">
               <div className="text-sm font-medium">AGI markets</div>
-              <div className="font-mono tabular-nums text-lg mt-0.5 text-accent" data-testid="text-manifold-avg">
+              <div className="font-mono tabular-nums text-xl mt-1 text-accent" data-testid="text-manifold-avg">
                 {manifoldAvg !== null ? `${(manifoldAvg * 100).toFixed(1)}%` : "—"}
               </div>
             </div>
@@ -126,10 +126,10 @@ export default function External() {
       {/* Per-scenario ensemble delta */}
       {crowdEnsemble !== null && (
         <Card className="p-4">
-          <div className="flex items-center gap-1.5 mb-3">
+          <div className="flex items-center gap-2 mb-3">
             <div className="w-1.5 h-1.5 rounded-full bg-accent" />
             <h2 className="text-sm font-semibold">Scenario vs Crowd</h2>
-            <span className="text-[10px] font-mono text-muted-foreground ml-auto">
+            <span className="text-[11px] font-mono text-muted-foreground ml-auto">
               crowd ensemble: {(crowdEnsemble * 100).toFixed(1)}%
             </span>
           </div>
@@ -146,7 +146,7 @@ export default function External() {
                     <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: s.color }} />
                     <span className="text-xs font-medium truncate">{s.name}</span>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <span
                       className="font-mono tabular-nums text-xs"
                       style={{ color: s.color }}
@@ -159,7 +159,7 @@ export default function External() {
               );
             })}
           </div>
-          <p className="text-[10px] text-muted-foreground mt-3 leading-relaxed">
+          <p className="text-[11px] text-muted-foreground mt-3 leading-relaxed">
             Crowd baseline shown is the mean of Metaculus &amp; Manifold AGI probabilities — an approximation.
             A large gap on <span className="text-foreground/80">baseline_2026</span> means the crowd and our
             model disagree on the default trajectory.
@@ -170,22 +170,22 @@ export default function External() {
       <div className="grid grid-cols-12 gap-3 sm:gap-4">
         <div className="col-span-12 md:col-span-6">
           <Card className="p-4">
-            <div className="flex items-center gap-1.5 mb-3">
+            <div className="flex items-center gap-2 mb-3">
               <h2 className="text-sm font-semibold">Metaculus</h2>
-              <span className="text-[10px] font-mono text-muted-foreground ml-auto">
+              <span className="text-[11px] font-mono text-muted-foreground ml-auto">
                 {metaculus.length} questions
               </span>
             </div>
             {isLoading ? (
               <div className="text-xs text-muted-foreground">Loading...</div>
             ) : isError || metaculus.length === 0 ? (
-              <div className="py-6 flex flex-col items-center gap-1.5 text-center" data-testid="empty-metaculus">
+              <div className="py-6 flex flex-col items-center gap-2 text-center" data-testid="empty-metaculus">
                 <Users className="w-5 h-5 text-muted-foreground/40" />
                 <div className="text-xs text-muted-foreground">
                   {isError ? "Unable to fetch. Metaculus may be rate-limited." : "No Metaculus questions loaded."}
                 </div>
                 <div className="text-[11px] text-muted-foreground/70 max-w-xs">
-                  Reload the page to retry the crowd forecast fetch. Metaculus updates hourly.
+                  Couldn’t reach Metaculus. Reload to retry.
                 </div>
               </div>
             ) : (
@@ -200,22 +200,22 @@ export default function External() {
 
         <div className="col-span-12 md:col-span-6">
           <Card className="p-4">
-            <div className="flex items-center gap-1.5 mb-3">
+            <div className="flex items-center gap-2 mb-3">
               <h2 className="text-sm font-semibold">Manifold Markets</h2>
-              <span className="text-[10px] font-mono text-muted-foreground ml-auto">
+              <span className="text-[11px] font-mono text-muted-foreground ml-auto">
                 {manifold.length} markets
               </span>
             </div>
             {isLoading ? (
               <div className="text-xs text-muted-foreground">Loading...</div>
             ) : isError || manifold.length === 0 ? (
-              <div className="py-6 flex flex-col items-center gap-1.5 text-center" data-testid="empty-manifold">
+              <div className="py-6 flex flex-col items-center gap-2 text-center" data-testid="empty-manifold">
                 <Users className="w-5 h-5 text-muted-foreground/40" />
                 <div className="text-xs text-muted-foreground">
                   {isError ? "Unable to fetch from Manifold." : "No Manifold markets loaded."}
                 </div>
                 <div className="text-[11px] text-muted-foreground/70 max-w-xs">
-                  Reload the page to retry. Manifold's public API can rate-limit anonymous callers.
+                  Couldn’t reach Manifold. Reload to retry.
                 </div>
               </div>
             ) : (
@@ -238,15 +238,15 @@ function ForecastRow({ f }: { f: ExternalForecast }) {
       href={f.url}
       target="_blank"
       rel="noreferrer"
-      className="block p-2.5 rounded-md border border-border/50 hover:border-accent/50 transition-colors"
+      className="block p-3 rounded-md border border-border/50 hover:border-accent/50 transition-colors"
       data-testid={`forecast-${f.source}-${f.question.slice(0, 20).replace(/\s/g, "-")}`}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium leading-tight">{f.question}</div>
-          <div className="text-[10px] font-mono text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
+          <div className="text-[11px] font-mono text-muted-foreground mt-1 flex items-center gap-2 flex-wrap">
             {f.numForecasters && (
-              <span className="flex items-center gap-0.5">
+              <span className="flex items-center gap-1">
                 <Users className="w-2.5 h-2.5" /> {f.numForecasters}
               </span>
             )}
@@ -261,7 +261,7 @@ function ForecastRow({ f }: { f: ExternalForecast }) {
             </div>
           )}
           {f.medianYear && (
-            <div className="text-[10px] font-mono text-muted-foreground">
+            <div className="text-[11px] font-mono text-muted-foreground">
               median {f.medianYear}
             </div>
           )}

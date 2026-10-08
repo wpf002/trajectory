@@ -40,12 +40,9 @@ export function SensitivityPanel() {
   const maxLeverage = Math.max(...drivers.map(d => d.leverage), 0.001);
 
   return (
-    <div className="space-y-2.5">
-      <div className="flex items-center gap-1.5 mb-1">
-        <Zap className="w-3 h-3 text-accent" />
-        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
-          Highest-leverage drivers
-        </div>
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-1">
+        <h2 className="text-sm font-semibold">Biggest levers</h2>
         <HoverCard openDelay={100}>
           <HoverCardTrigger asChild>
             <button className="ml-auto text-muted-foreground hover:text-foreground" aria-label="What is leverage?">
@@ -55,9 +52,7 @@ export function SensitivityPanel() {
           <HoverCardContent side="left" className="w-72 text-xs">
             <div className="font-medium mb-1">Sensitivity analysis</div>
             <div className="text-muted-foreground">
-              Perturbs each driver by ±0.1 and measures the total absolute change across all
-              scenario probabilities. Higher leverage = this driver moves the forecast the most.
-              Bar direction shows whether the driver currently favors your top scenario.
+              How much the forecast moves when each driver shifts 10 points. Green bars favor the top scenario.
             </div>
           </HoverCardContent>
         </HoverCard>
@@ -82,8 +77,8 @@ export function SensitivityPanel() {
                   {d.driverLabel}
                 </span>
                 <span
-                  className={`font-mono text-[10px] shrink-0 tabular-nums ${
-                    favorable ? "text-emerald-500" : "text-rose-500"
+                  className={`font-mono text-[11px] shrink-0 tabular-nums ${
+                    favorable ? "text-positive" : "text-negative"
                   }`}
                   title={`Partial derivative on top scenario: ${forTop.toFixed(3)}/unit`}
                 >
@@ -93,7 +88,7 @@ export function SensitivityPanel() {
               <div className="mt-1 h-1.5 rounded-full bg-muted/40 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all duration-300 ${
-                    favorable ? "bg-emerald-500/70" : "bg-rose-500/70"
+                    favorable ? "bg-positive/70" : "bg-negative/70"
                   }`}
                   style={{ width: `${pct}%` }}
                 />
@@ -103,16 +98,6 @@ export function SensitivityPanel() {
         })
       )}
 
-      {topScenarioId && (
-        <div className="pt-2 border-t border-border/50">
-          <div className="text-[10px] font-mono text-muted-foreground">
-            Slopes measured against{" "}
-            <span className="text-foreground/80">
-              {SCENARIOS.find(s => s.id === topScenarioId)?.name ?? topScenarioId}
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

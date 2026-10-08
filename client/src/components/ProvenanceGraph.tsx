@@ -80,7 +80,7 @@ export function ProvenanceGraph() {
           from: `s:${s.id}`,
           to: `d:${driverId}`,
           weight: Math.min(Math.abs(decayed), 1),
-          color: delta > 0 ? "#22c55e" : "#ef4444",
+          color: delta > 0 ? "hsl(var(--positive))" : "hsl(var(--negative))",
         });
       });
     });
@@ -134,7 +134,7 @@ export function ProvenanceGraph() {
     <Card data-testid="card-provenance-graph">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-base flex items-center gap-2">
+          <CardTitle className="text-sm flex items-center gap-2">
             <GitBranch className="h-4 w-4" />
             Signal → Driver → Scenario provenance
           </CardTitle>
@@ -188,7 +188,7 @@ export function ProvenanceGraph() {
       <CardContent>
         {signalNodes.length === 0 ? (
           <div className="text-sm text-muted-foreground py-8 text-center" data-testid="text-provenance-empty">
-            No recent signals with driver impacts. Add signals or wait for the daily update.
+            No recent signals.
           </div>
         ) : (
           <div className="w-full overflow-x-auto">
@@ -224,7 +224,9 @@ export function ProvenanceGraph() {
                   <path
                     key={i}
                     d={`M ${x1},${y1} C ${midX},${y1} ${midX},${y2} ${x2},${y2}`}
-                    stroke={e.color ?? "#888"}
+                    // style, not the stroke attribute: SVG presentation attributes
+                    // don't resolve var(), and edge colors are theme tokens.
+                    style={{ stroke: e.color ?? "hsl(var(--muted-foreground))" }}
                     strokeWidth={Math.max(0.5, e.weight * 3)}
                     fill="none"
                     opacity={visible ? 0.55 : 0.05}
@@ -315,11 +317,11 @@ export function ProvenanceGraph() {
         )}
         <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
           <div className="flex items-center gap-1">
-            <div className="w-3 h-0.5" style={{ backgroundColor: "#22c55e" }} />
+            <div className="w-3 h-0.5" style={{ backgroundColor: "hsl(var(--positive))" }} />
             <span>Signal pushes driver up</span>
           </div>
           <div className="flex items-center gap-1">
-            <div className="w-3 h-0.5" style={{ backgroundColor: "#ef4444" }} />
+            <div className="w-3 h-0.5" style={{ backgroundColor: "hsl(var(--negative))" }} />
             <span>Signal pushes driver down</span>
           </div>
           <div>Edge thickness = magnitude of impact/weight</div>

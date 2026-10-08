@@ -80,12 +80,12 @@ export function WhyMovedPanel() {
 
   return (
     <Card className="p-3" data-testid="panel-why-moved">
-      <div className="flex items-center gap-1.5 mb-2">
+      <div className="flex items-center gap-2 mb-2">
         <Sparkle className="w-3.5 h-3.5 text-accent" />
         <h2 className="text-sm font-semibold">Why did this move?</h2>
-        <span className="text-[10px] font-mono text-muted-foreground ml-auto">last 24h · attributed to signals from last 48h</span>
+        <span className="text-[11px] font-mono text-muted-foreground ml-auto">last 24h · attributed to signals from last 48h</span>
       </div>
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {shown.map(m => (
           <CausalChain key={m.scenario.id} move={m} />
         ))}
@@ -93,7 +93,7 @@ export function WhyMovedPanel() {
       {moves.length > 2 && (
         <button
           onClick={() => setExpanded(v => !v)}
-          className="text-[10px] font-mono text-muted-foreground hover:text-foreground mt-2 transition-colors"
+          className="text-[11px] font-mono text-muted-foreground hover:text-foreground mt-2 transition-colors"
           data-testid="button-why-moved-toggle"
         >
           {expanded ? "Show less" : `Show ${moves.length - 2} more`}
@@ -110,7 +110,7 @@ function CausalChain({ move }: { move: {
 } }) {
   const { scenario, deltaDay, topSignals } = move;
   const Arrow = deltaDay >= 0 ? ArrowUp : ArrowDown;
-  const deltaColor = deltaDay >= 0 ? "text-emerald-500" : "text-rose-500";
+  const deltaColor = deltaDay >= 0 ? "text-positive" : "text-negative";
   const sign = deltaDay >= 0 ? "+" : "";
 
   // Figure out which drivers the top signals collectively touched.
@@ -129,7 +129,7 @@ function CausalChain({ move }: { move: {
 
   return (
     <div className="p-2 rounded-md border border-border/50 bg-muted/10" data-testid={`causal-${scenario.id}`}>
-      <div className="flex items-center gap-1.5 mb-1.5">
+      <div className="flex items-center gap-2 mb-2">
         <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: scenario.color }} />
         <span className="text-xs font-semibold truncate">{scenario.name}</span>
         <Arrow className={`w-3 h-3 ${deltaColor}`} />
@@ -155,7 +155,7 @@ function CausalChain({ move }: { move: {
             return (
               <span key={driverId}>
                 <span className="font-semibold text-foreground">{driver?.label ?? driverId}</span>
-                <span className={`font-mono text-[10px] ml-0.5 ${contrib >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                <span className={`font-mono text-[11px] ml-1 ${contrib >= 0 ? "text-positive" : "text-negative"}`}>
                   ({contrib >= 0 ? "+" : ""}{(contrib * 100).toFixed(1)}pp)
                 </span>
                 {!isLast && (isPenult ? " and " : ", ")}
@@ -166,13 +166,13 @@ function CausalChain({ move }: { move: {
       )}
 
       {topSignals.length > 0 && (
-        <ul className="mt-1.5 space-y-0.5 pl-3">
+        <ul className="mt-2 space-y-1 pl-3">
           {topSignals.map(s => (
-            <li key={s.signal.id} className="text-[11px] flex items-start gap-1.5" data-testid={`causal-signal-${s.signal.id}`}>
-              <span className="text-accent mt-0.5">▸</span>
+            <li key={s.signal.id} className="text-[11px] flex items-start gap-2" data-testid={`causal-signal-${s.signal.id}`}>
+              <span className="text-accent mt-1">▸</span>
               <span className="flex-1 min-w-0">
                 <span className="text-foreground/85">{s.signal.title}</span>
-                <span className={`font-mono text-[10px] ml-1.5 tabular-nums ${s.contrib >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                <span className={`font-mono text-[11px] ml-2 tabular-nums ${s.contrib >= 0 ? "text-positive" : "text-negative"}`}>
                   {s.contrib >= 0 ? "+" : ""}{(s.contrib * 100).toFixed(1)}pp
                 </span>
               </span>

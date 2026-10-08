@@ -28,6 +28,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        positive: "hsl(var(--positive) / <alpha-value>)",
+        negative: "hsl(var(--negative) / <alpha-value>)",
+        warning: "hsl(var(--warning) / <alpha-value>)",
+        info: "hsl(var(--info) / <alpha-value>)",
         chart: {
           1: "hsl(var(--chart-1))",
           2: "hsl(var(--chart-2))",

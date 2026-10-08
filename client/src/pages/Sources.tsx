@@ -42,11 +42,11 @@ interface CollectorRunResp {
 function tierColor(tier: string): string {
   switch (tier) {
     case "primary":
-      return "text-emerald-600 dark:text-emerald-400";
+      return "text-positive";
     case "secondary":
-      return "text-blue-600 dark:text-blue-400";
+      return "text-info";
     case "rejected":
-      return "text-red-600 dark:text-red-400";
+      return "text-negative";
     default:
       return "text-muted-foreground";
   }
@@ -55,11 +55,11 @@ function tierColor(tier: string): string {
 function tierBg(tier: string): string {
   switch (tier) {
     case "primary":
-      return "bg-emerald-500";
+      return "bg-positive";
     case "secondary":
-      return "bg-blue-500";
+      return "bg-info";
     case "rejected":
-      return "bg-red-500";
+      return "bg-negative";
     default:
       return "bg-muted-foreground/50";
   }
@@ -265,7 +265,7 @@ export default function Sources() {
                     >
                       <div className="flex-1 min-w-0">
                         <div className="truncate">{p.title}</div>
-                        <div className="text-xs text-muted-foreground mt-0.5 flex gap-2 flex-wrap">
+                        <div className="text-xs text-muted-foreground mt-1 flex gap-2 flex-wrap">
                           <span className={tierColor(p.sourceTier)}>{p.sourceTier}</span>
                           <span>·</span>
                           <span className="truncate">{p.sourceDomain}</span>
@@ -313,7 +313,7 @@ export default function Sources() {
               {status.data.topDomains.map((d) => (
                 <div
                   key={d.domain}
-                  className="grid grid-cols-12 gap-2 text-sm py-1.5 hover-elevate rounded px-2"
+                  className="grid grid-cols-12 gap-2 text-sm py-2 hover-elevate rounded px-2"
                   data-testid={`row-domain-${d.domain}`}
                 >
                   <div className="col-span-5 truncate font-mono text-xs flex items-center gap-1">
@@ -362,8 +362,8 @@ export default function Sources() {
             series ingest (M2, industrial production, energy prices).
           </p>
           <p className="pt-2 border-t">
-            Tier weights: <span className="text-emerald-600 dark:text-emerald-400">primary ×1.0</span>,{" "}
-            <span className="text-blue-600 dark:text-blue-400">secondary ×0.7</span>,{" "}
+            Tier weights: <span className="text-positive">primary ×1.0</span>,{" "}
+            <span className="text-info">secondary ×0.7</span>,{" "}
             <span className="text-muted-foreground">unknown ×0.5</span>, rejected sources are discarded before analysis.
           </p>
         </CardContent>

@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { toCSV, downloadCSV } from "@/lib/csv";
 import { useToast } from "@/hooks/use-toast";
+import { ProvenanceGraph } from "@/components/ProvenanceGraph";
 
 interface AnalysisResult {
   category: string;
@@ -52,17 +53,17 @@ interface AnalysisResult {
 }
 
 const TIER_STYLES: Record<string, { label: string; cls: string }> = {
-  primary: { label: "primary", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" },
-  secondary: { label: "secondary", cls: "bg-amber-500/10 text-amber-500 border-amber-500/30" },
+  primary: { label: "primary", cls: "bg-positive/10 text-positive border-positive/30" },
+  secondary: { label: "secondary", cls: "bg-warning/10 text-warning border-warning/30" },
   unknown: { label: "unknown", cls: "bg-muted/30 text-muted-foreground border-border/50" },
-  rejected: { label: "rejected", cls: "bg-rose-500/10 text-rose-500 border-rose-500/30" },
+  rejected: { label: "rejected", cls: "bg-negative/10 text-negative border-negative/30" },
 };
 
 function TierBadge({ tier }: { tier?: string | null }) {
   if (!tier) return null;
   const t = TIER_STYLES[tier] ?? TIER_STYLES.unknown;
   return (
-    <Badge variant="outline" className={`text-[9px] font-mono uppercase tracking-wider ${t.cls}`}>
+    <Badge variant="outline" className={`text-[11px] font-mono uppercase tracking-wider ${t.cls}`}>
       {t.label}
     </Badge>
   );
@@ -70,13 +71,13 @@ function TierBadge({ tier }: { tier?: string | null }) {
 
 function ConfidenceBar({ value }: { value: number }) {
   const pct = Math.max(0, Math.min(100, value * 100));
-  const color = pct >= 70 ? "bg-emerald-500" : pct >= 40 ? "bg-amber-500" : "bg-rose-500";
+  const color = pct >= 70 ? "bg-positive" : pct >= 40 ? "bg-warning" : "bg-negative";
   return (
-    <div className="flex items-center gap-1.5">
+    <div className="flex items-center gap-2">
       <div className="h-1 flex-1 bg-muted/30 rounded-full overflow-hidden min-w-[40px] max-w-[80px]">
         <div className={`h-full ${color} transition-all`} style={{ width: `${pct}%` }} />
       </div>
-      <span className="text-[9px] font-mono tabular-nums text-muted-foreground">{pct.toFixed(0)}%</span>
+      <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{pct.toFixed(0)}%</span>
     </div>
   );
 }
@@ -103,12 +104,12 @@ function strengthFor(magnitude: number): "weak" | "moderate" | "strong" {
 function StrengthBadge({ level }: { level: "weak" | "moderate" | "strong" }) {
   const map = {
     weak: { label: "weak", cls: "bg-muted/30 text-muted-foreground border-border/50" },
-    moderate: { label: "moderate", cls: "bg-amber-500/10 text-amber-500 border-amber-500/30" },
-    strong: { label: "strong", cls: "bg-emerald-500/10 text-emerald-500 border-emerald-500/30" },
+    moderate: { label: "moderate", cls: "bg-warning/10 text-warning border-warning/30" },
+    strong: { label: "strong", cls: "bg-positive/10 text-positive border-positive/30" },
   };
   const c = map[level];
   return (
-    <Badge variant="outline" className={`text-[9px] font-mono uppercase tracking-wider ${c.cls}`}>
+    <Badge variant="outline" className={`text-[11px] font-mono uppercase tracking-wider ${c.cls}`}>
       {c.label}
     </Badge>
   );
@@ -219,11 +220,11 @@ export default function Signals() {
   const hasActiveFilters = filterDriver !== "all" || filterDirection !== "all" || filterTier !== "all" || filterAnalyzer !== "all" || sortBy !== "newest";
 
   return (
-    <div className="p-3 sm:p-5 space-y-4 max-w-[1400px] mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 max-w-[1400px] mx-auto">
       <div className="pb-2 border-b border-border">
-        <h1 className="text-xl font-semibold tracking-tight" data-testid="page-title">Signal Ingestion</h1>
-        <div className="text-xs text-muted-foreground font-mono mt-0.5">
-          Add real-world evidence · classify impact · update the model
+        <h1 className="text-xl font-semibold tracking-tight" data-testid="page-title">Signals</h1>
+        <div className="text-xs text-muted-foreground font-mono mt-1">
+          News that moves the drivers
         </div>
       </div>
 
@@ -231,13 +232,13 @@ export default function Signals() {
         {/* Input side */}
         <div className="col-span-12 md:col-span-5 space-y-3">
           <Card className="p-4 space-y-3">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <Sparkles className="w-3.5 h-3.5 text-accent" />
               <h2 className="text-sm font-semibold">New Signal</h2>
             </div>
             <div className="space-y-2">
               <div>
-                <label className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Headline / Title</label>
+                <label className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Headline / Title</label>
                 <Input
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
@@ -246,7 +247,7 @@ export default function Signals() {
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Source URL / name</label>
+                <label className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Source URL / name</label>
                 <Input
                   value={source}
                   onChange={(e) => setSource(e.target.value)}
@@ -255,11 +256,11 @@ export default function Signals() {
                 />
               </div>
               <div>
-                <label className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground">Details / abstract</label>
+                <label className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Details / abstract</label>
                 <Textarea
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="Paste article summary, benchmark result, layoff announcement, geopolitical event, etc. The classifier looks for keywords: benchmark, layoff, alignment, deepfake, chip ban, treaty, jailbreak, UBI, etc."
+                  placeholder="Article summary or key facts (optional)"
                   rows={6}
                   data-testid="input-signal-text"
                 />
@@ -290,41 +291,41 @@ export default function Signals() {
           {analysis && (
             <Card className="p-4 space-y-2 border-accent/40">
               <div className="flex items-center justify-between">
-                <div className="text-[10px] uppercase tracking-widest font-mono text-accent">Proposed impact</div>
+                <div className="text-[11px] uppercase tracking-widest font-mono text-accent">Proposed impact</div>
                 <StrengthBadge level={analysis.strengthLabel ?? strengthFor(analysis.magnitude)} />
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                <Badge variant="outline" className="font-mono text-[10px]">{analysis.category}</Badge>
+                <Badge variant="outline" className="font-mono text-[11px]">{analysis.category}</Badge>
                 <Badge
                   variant="outline"
-                  className={`font-mono text-[10px] ${
-                    analysis.direction === "accelerating" ? "text-emerald-500" : analysis.direction === "decelerating" ? "text-rose-500" : ""
+                  className={`font-mono text-[11px] ${
+                    analysis.direction === "accelerating" ? "text-positive" : analysis.direction === "decelerating" ? "text-negative" : ""
                   }`}
                 >
                   {analysis.direction}
                 </Badge>
-                <span className="text-[10px] font-mono text-muted-foreground">
+                <span className="text-[11px] font-mono text-muted-foreground">
                   magnitude: {(analysis.magnitude * 100).toFixed(0)}%
                 </span>
                 <TierBadge tier={analysis.sourceTier} />
               </div>
               {typeof analysis.confidence === "number" && (
                 <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-mono uppercase tracking-widest text-muted-foreground">Confidence</span>
+                  <span className="text-[11px] font-mono uppercase tracking-widest text-muted-foreground">Confidence</span>
                   <ConfidenceBar value={analysis.confidence} />
                   {analysis.analyzer && (
-                    <span className="text-[9px] font-mono text-muted-foreground/70 ml-auto">{analysis.analyzer}</span>
+                    <span className="text-[11px] font-mono text-muted-foreground/70 ml-auto">{analysis.analyzer}</span>
                   )}
                 </div>
               )}
               <div>
-                <div className="text-[10px] uppercase tracking-widest font-mono text-muted-foreground mb-0.5">Reasoning</div>
+                <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground mb-1">Reasoning</div>
                 <p className="text-xs text-foreground/80 leading-relaxed" data-testid="text-analysis-reasoning">{analysis.reasoning}</p>
               </div>
               {analysis.entities && analysis.entities.length > 0 && (
                 <div className="flex flex-wrap gap-1">
                   {analysis.entities.map(e => (
-                    <Badge key={e} variant="secondary" className="text-[9px] font-mono">{e}</Badge>
+                    <Badge key={e} variant="secondary" className="text-[11px] font-mono">{e}</Badge>
                   ))}
                 </div>
               )}
@@ -334,7 +335,7 @@ export default function Signals() {
                   return (
                     <div key={driver} className="flex items-center justify-between text-xs">
                       <span className="text-foreground/80">{d?.label ?? driver}</span>
-                      <span className={`font-mono tabular-nums ${delta > 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                      <span className={`font-mono tabular-nums ${delta > 0 ? "text-positive" : "text-negative"}`}>
                         {delta > 0 ? "+" : ""}{(delta * 100).toFixed(1)}
                       </span>
                     </div>
@@ -351,10 +352,10 @@ export default function Signals() {
         {/* Signal feed */}
         <div className="col-span-12 md:col-span-7">
           <Card className="p-4">
-            <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+            <div className="flex items-center gap-2 mb-3 flex-wrap">
               <Radio className="w-3.5 h-3.5 text-accent" />
               <h2 className="text-sm font-semibold">Signal Feed</h2>
-              <span className="text-[10px] font-mono text-muted-foreground ml-auto">
+              <span className="text-[11px] font-mono text-muted-foreground ml-auto">
                 {signals.length} recorded
               </span>
             </div>
@@ -425,7 +426,7 @@ export default function Signals() {
                     setFilterAnalyzer("all");
                     setSortBy("newest");
                   }}
-                  className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors ml-1"
+                  className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors ml-1"
                   data-testid="button-clear-filters"
                 >
                   <XIcon className="w-2.5 h-2.5" /> Clear
@@ -457,7 +458,7 @@ export default function Signals() {
                   downloadCSV(`trajectory-signals-${stamp}.csv`, toCSV(headers, rows));
                 }}
                 disabled={signals.length === 0}
-                className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors ml-auto disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors ml-auto disabled:opacity-40 disabled:cursor-not-allowed"
                 data-testid="button-export-signals-csv"
                 title="Download filtered signals as CSV"
               >
@@ -468,7 +469,7 @@ export default function Signals() {
             {isLoading ? (
               <div className="text-xs text-muted-foreground">Loading...</div>
             ) : signals.length === 0 ? (
-              <div className="py-10 text-center flex flex-col items-center gap-3" data-testid="empty-signals">
+              <div className="py-12 text-center flex flex-col items-center gap-3" data-testid="empty-signals">
                 <Radio className="w-6 h-6 text-muted-foreground/50" />
                 {hasActiveFilters ? (
                   <>
@@ -491,7 +492,7 @@ export default function Signals() {
                   <>
                     <div className="text-xs text-muted-foreground">No signals yet.</div>
                     <div className="text-[11px] text-muted-foreground max-w-xs">
-                      Paste a headline in the box above (e.g. <span className="font-mono text-foreground/70">"NVIDIA H200 shipments hit 500k Q2"</span>) and click <span className="font-mono text-foreground/70">Analyze &amp; add</span>. Each signal nudges the driver values that shape the forecast.
+                      Paste a headline above and click <span className="font-mono text-foreground/70">Analyze &amp; add</span>.
                     </div>
                   </>
                 )}
@@ -514,11 +515,11 @@ export default function Signals() {
                           setSelectedSignal(s);
                         }
                       }}
-                      className="w-full text-left flex items-start gap-3 p-2.5 rounded-md border border-border/50 hover:border-border hover:bg-muted/30 transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+                      className="w-full text-left flex items-start gap-3 p-3 rounded-md border border-border/50 hover:border-border hover:bg-muted/30 transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
                       data-testid={`signal-${s.id}`}
                     >
-                      <Arrow className={`w-3.5 h-3.5 mt-0.5 shrink-0 ${
-                        s.direction === "accelerating" ? "text-emerald-500" : s.direction === "decelerating" ? "text-rose-500" : "text-muted-foreground"
+                      <Arrow className={`w-3.5 h-3.5 mt-1 shrink-0 ${
+                        s.direction === "accelerating" ? "text-positive" : s.direction === "decelerating" ? "text-negative" : "text-muted-foreground"
                       }`} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
@@ -545,11 +546,11 @@ export default function Signals() {
                             </button>
                           </div>
                         </div>
-                        <div className="text-[10px] font-mono text-muted-foreground flex items-center gap-2 mt-0.5 flex-wrap">
+                        <div className="text-[11px] font-mono text-muted-foreground flex items-center gap-2 mt-1 flex-wrap">
                           <span>{new Date(s.timestamp * 1000).toLocaleDateString()}</span>
                           <span>·</span>
                           {s.source.startsWith("http") ? (
-                            <a href={s.source} target="_blank" rel="noreferrer" className="hover:text-accent flex items-center gap-0.5" onClick={e => e.stopPropagation()}>
+                            <a href={s.source} target="_blank" rel="noreferrer" className="hover:text-accent flex items-center gap-1" onClick={e => e.stopPropagation()}>
                               {s.sourceDomain || "source"} <ExternalLink className="w-2.5 h-2.5" />
                             </a>
                           ) : (
@@ -573,18 +574,18 @@ export default function Signals() {
                           )}
                         </div>
                         {typeof s.confidence === "number" && (
-                          <div className="mt-1.5">
+                          <div className="mt-2">
                             <ConfidenceBar value={s.confidence} />
                           </div>
                         )}
                         {s.reasoning && (
-                          <div className="mt-1.5 text-[11px] text-muted-foreground leading-relaxed line-clamp-2 hover:line-clamp-none" data-testid={`signal-reasoning-${s.id}`}>
+                          <div className="mt-2 text-[11px] text-muted-foreground leading-relaxed line-clamp-2 hover:line-clamp-none" data-testid={`signal-reasoning-${s.id}`}>
                             {s.reasoning}
                           </div>
                         )}
-                        <div className="flex flex-wrap gap-1 mt-1.5">
+                        <div className="flex flex-wrap gap-1 mt-2">
                           {Object.entries(impacts).slice(0, 6).map(([driver, delta]) => (
-                            <Badge key={driver} variant="outline" className="text-[9px] font-mono">
+                            <Badge key={driver} variant="outline" className="text-[11px] font-mono">
                               {driver.replace(/_/g, " ")} {delta > 0 ? "+" : ""}{(delta * 100).toFixed(1)}
                             </Badge>
                           ))}
@@ -622,16 +623,16 @@ export default function Signals() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <TierBadge tier={selectedSignal.sourceTier} />
                     <StrengthBadge level={strengthFor(selectedSignal.magnitude)} />
-                    <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-widest">
+                    <span className="text-[11px] font-mono text-muted-foreground uppercase tracking-widest">
                       {selectedSignal.category} · {selectedSignal.direction}
                     </span>
                   </div>
-                  <DialogTitle className="text-base leading-tight">{selectedSignal.title}</DialogTitle>
-                  <DialogDescription className="text-[10px] font-mono flex items-center gap-2 flex-wrap">
+                  <DialogTitle className="text-sm leading-tight">{selectedSignal.title}</DialogTitle>
+                  <DialogDescription className="text-[11px] font-mono flex items-center gap-2 flex-wrap">
                     <span>{new Date(selectedSignal.timestamp * 1000).toLocaleString()}</span>
                     <span>·</span>
                     {selectedSignal.source.startsWith("http") ? (
-                      <a href={selectedSignal.source} target="_blank" rel="noreferrer" className="hover:text-accent flex items-center gap-0.5">
+                      <a href={selectedSignal.source} target="_blank" rel="noreferrer" className="hover:text-accent flex items-center gap-1">
                         {selectedSignal.sourceDomain || "source"} <ExternalLink className="w-2.5 h-2.5" />
                       </a>
                     ) : (
@@ -656,14 +657,14 @@ export default function Signals() {
 
                 {selectedSignal.summary && (
                   <div className="space-y-1">
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Summary</div>
+                    <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">Summary</div>
                     <div className="text-sm leading-relaxed text-foreground/90">{selectedSignal.summary}</div>
                   </div>
                 )}
 
                 {selectedSignal.reasoning && (
                   <div className="space-y-1">
-                    <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Analyst Reasoning</div>
+                    <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">Analyst Reasoning</div>
                     <div className="text-xs leading-relaxed text-muted-foreground italic border-l-2 border-accent/40 pl-3" data-testid="text-signal-full-reasoning">
                       {selectedSignal.reasoning}
                     </div>
@@ -671,11 +672,11 @@ export default function Signals() {
                 )}
 
                 <div className="space-y-2">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">All Driver Impacts ({impactEntries.length})</div>
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">All Driver Impacts ({impactEntries.length})</div>
                   {impactEntries.length === 0 ? (
                     <div className="text-xs text-muted-foreground">This signal did not affect any drivers.</div>
                   ) : (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {impactEntries.map(([driverId, delta]) => {
                         const d = delta as number;
                         const driver = DRIVERS.find(dr => dr.id === driverId);
@@ -686,12 +687,12 @@ export default function Signals() {
                           <div key={driverId} className="group" data-testid={`impact-driver-${driverId}`}>
                             <div className="flex items-center justify-between gap-2 text-xs">
                               <span className="truncate flex-1 min-w-0">{label}</span>
-                              <span className={`font-mono text-[10px] tabular-nums w-16 text-right ${up ? "text-emerald-500" : "text-rose-500"}`}>
+                              <span className={`font-mono text-[11px] tabular-nums w-16 text-right ${up ? "text-positive" : "text-negative"}`}>
                                 {up ? "+" : ""}{(d * 100).toFixed(2)}
                               </span>
                             </div>
-                            <div className="h-1 rounded-full bg-muted/50 mt-0.5 overflow-hidden">
-                              <div className={`h-full ${up ? "bg-emerald-500/60" : "bg-rose-500/60"}`} style={{ width: `${pct}%` }} />
+                            <div className="h-1 rounded-full bg-muted/50 mt-1 overflow-hidden">
+                              <div className={`h-full ${up ? "bg-positive/60" : "bg-negative/60"}`} style={{ width: `${pct}%` }} />
                             </div>
                           </div>
                         );
@@ -728,31 +729,31 @@ export default function Signals() {
                   }).sort((a, b) => Math.abs(Math.log(b.lr || 1)) - Math.abs(Math.log(a.lr || 1)));
                   return (
                     <div className="space-y-2" data-testid="section-bayes">
-                      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+                      <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">
                         Bayesian update <span className="opacity-70 normal-case tracking-normal">— prior (before this signal) → likelihood ratio → posterior</span>
                       </div>
                       <div className="space-y-1">
                         {bayesRows.slice(0, 4).map((r) => (
                           <div key={r.id} className="grid grid-cols-[1fr_60px_60px_70px] items-center gap-2 text-xs" data-testid={`bayes-${r.id}`}>
-                            <div className="flex items-center gap-1.5 min-w-0">
+                            <div className="flex items-center gap-2 min-w-0">
                               <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
                               <span className="truncate">{r.name}</span>
                             </div>
-                            <span className="font-mono text-[10px] tabular-nums text-right text-muted-foreground">
+                            <span className="font-mono text-[11px] tabular-nums text-right text-muted-foreground">
                               {(r.prior * 100).toFixed(1)}%
                             </span>
-                            <span className="font-mono text-[10px] tabular-nums text-right" style={{ color: r.color }}>
+                            <span className="font-mono text-[11px] tabular-nums text-right" style={{ color: r.color }}>
                               {(r.posterior * 100).toFixed(1)}%
                             </span>
-                            <span className={`font-mono text-[10px] tabular-nums text-right ${
-                              Math.abs(Math.log(r.lr || 1)) < 0.02 ? "text-muted-foreground" : r.lr > 1 ? "text-emerald-500" : "text-rose-500"
+                            <span className={`font-mono text-[11px] tabular-nums text-right ${
+                              Math.abs(Math.log(r.lr || 1)) < 0.02 ? "text-muted-foreground" : r.lr > 1 ? "text-positive" : "text-negative"
                             }`}>
                               LR {r.lr.toFixed(2)}
                             </span>
                           </div>
                         ))}
                       </div>
-                      <div className="text-[10px] text-muted-foreground pt-1 border-t border-border">
+                      <div className="text-[11px] text-muted-foreground pt-1 border-t border-border">
                         LR &gt; 1 means the signal made this scenario more likely; LR &lt; 1 means less likely.
                       </div>
                     </div>
@@ -790,13 +791,13 @@ export default function Signals() {
                     <div className="space-y-2 rounded-md border border-border p-3 bg-muted/20" data-testid="section-counterfactual">
                       <div className="flex items-center justify-between gap-2 flex-wrap">
                         <div>
-                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Counterfactual replay</div>
+                          <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">Counterfactual replay</div>
                           <div className="text-xs text-muted-foreground">
                             If this signal never happened, scenarios would sit at:
                           </div>
                         </div>
                       </div>
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         {rows.map((r) => {
                           const up = r.delta > 0;
                           const pct = (Math.abs(r.delta) / maxAbsDelta) * 100;
@@ -805,27 +806,27 @@ export default function Signals() {
                               <div className="flex items-center gap-2 text-xs">
                                 <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: r.color }} />
                                 <span className="truncate flex-1 min-w-0">{r.name}</span>
-                                <span className="font-mono text-[10px] tabular-nums text-muted-foreground w-14 text-right">
+                                <span className="font-mono text-[11px] tabular-nums text-muted-foreground w-14 text-right">
                                   {(r.counterfactual * 100).toFixed(1)}%
                                 </span>
                                 <span className="text-muted-foreground">→</span>
-                                <span className="font-mono text-[10px] tabular-nums w-14 text-right" style={{ color: r.color }}>
+                                <span className="font-mono text-[11px] tabular-nums w-14 text-right" style={{ color: r.color }}>
                                   {(r.current * 100).toFixed(1)}%
                                 </span>
-                                <span className={`font-mono text-[10px] tabular-nums w-14 text-right ${
-                                  Math.abs(r.delta) < 0.0001 ? "text-muted-foreground" : up ? "text-emerald-500" : "text-rose-500"
+                                <span className={`font-mono text-[11px] tabular-nums w-14 text-right ${
+                                  Math.abs(r.delta) < 0.0001 ? "text-muted-foreground" : up ? "text-positive" : "text-negative"
                                 }`}>
                                   {up ? "+" : ""}{(r.delta * 100).toFixed(2)}pp
                                 </span>
                               </div>
-                              <div className="h-0.5 rounded-full bg-muted/50 mt-0.5 overflow-hidden">
-                                <div className={`h-full ${up ? "bg-emerald-500/60" : "bg-rose-500/60"}`} style={{ width: `${pct}%` }} />
+                              <div className="h-0.5 rounded-full bg-muted/50 mt-1 overflow-hidden">
+                                <div className={`h-full ${up ? "bg-positive/60" : "bg-negative/60"}`} style={{ width: `${pct}%` }} />
                               </div>
                             </div>
                           );
                         })}
                       </div>
-                      <div className="text-[10px] text-muted-foreground font-mono pt-1 border-t border-border">
+                      <div className="text-[11px] text-muted-foreground font-mono pt-1 border-t border-border">
                         counterfactual → current → delta (pp)
                       </div>
                     </div>
@@ -833,8 +834,8 @@ export default function Signals() {
                 })()}
 
                 <div className="space-y-2">
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">Scenario Impact <span className="opacity-70 normal-case tracking-normal">— sum of (driver delta × scenario weight)</span></div>
-                  <div className="space-y-1.5">
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono">Scenario Impact <span className="opacity-70 normal-case tracking-normal">— sum of (driver delta × scenario weight)</span></div>
+                  <div className="space-y-2">
                     {scenarioImpacts.map(s => {
                       const pct = (Math.abs(s.impact) / maxScenarioAbs) * 100;
                       const up = s.impact >= 0;
@@ -842,14 +843,14 @@ export default function Signals() {
                         <div key={s.id} className="group" data-testid={`scenario-impact-${s.id}`}>
                           <div className="flex items-center justify-between gap-2 text-xs">
                             <span className="truncate flex-1 min-w-0">{s.label}</span>
-                            <span className={`font-mono text-[10px] tabular-nums w-16 text-right ${
-                              Math.abs(s.impact) < 0.0001 ? "text-muted-foreground" : up ? "text-emerald-500" : "text-rose-500"
+                            <span className={`font-mono text-[11px] tabular-nums w-16 text-right ${
+                              Math.abs(s.impact) < 0.0001 ? "text-muted-foreground" : up ? "text-positive" : "text-negative"
                             }`}>
                               {up ? "+" : ""}{(s.impact * 100).toFixed(2)}
                             </span>
                           </div>
-                          <div className="h-1 rounded-full bg-muted/50 mt-0.5 overflow-hidden">
-                            <div className={`h-full ${up ? "bg-emerald-500/60" : "bg-rose-500/60"}`} style={{ width: `${pct}%` }} />
+                          <div className="h-1 rounded-full bg-muted/50 mt-1 overflow-hidden">
+                            <div className={`h-full ${up ? "bg-positive/60" : "bg-negative/60"}`} style={{ width: `${pct}%` }} />
                           </div>
                         </div>
                       );
@@ -861,6 +862,7 @@ export default function Signals() {
           })()}
         </DialogContent>
       </Dialog>
+      <ProvenanceGraph />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Switch, Route, Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider, useTheme } from "@/lib/theme";
@@ -54,6 +54,24 @@ function useUrlStateHydration() {
   }, []);
 }
 
+/**
+ * Load the news-derived forecast from the server and make it the dashboard's
+ * starting point. Without this every page computed from the static
+ * DEFAULT_DRIVER_VALUES table and none of the collected signals reached the UI.
+ */
+function useNewsBaseline() {
+  const loadNewsBaseline = useTrajectoryStore(s => s.loadNewsBaseline);
+  const { data } = useQuery<{ driverValues: Record<DriverId, number>; signalCount: number; asOf: number | null }>({
+    queryKey: ["/api/probabilities"],
+    refetchInterval: 5 * 60_000,
+  });
+  useEffect(() => {
+    if (data?.driverValues) {
+      loadNewsBaseline(data.driverValues, { asOf: data.asOf, signalCount: data.signalCount });
+    }
+  }, [data, loadNewsBaseline]);
+}
+
 function AppRouter() {
   const [navOpen, setNavOpen] = useState(false);
   const [showShortcuts, setShowShortcuts] = useState(false);
@@ -61,6 +79,7 @@ function AppRouter() {
   const { toggle: toggleTheme } = useTheme();
 
   useUrlStateHydration();
+  useNewsBaseline();
 
   useKeyboardShortcuts({
     onOpenHelp: () => setShowShortcuts(v => !v),

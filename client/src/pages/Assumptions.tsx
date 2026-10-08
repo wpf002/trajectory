@@ -7,6 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { SCENARIOS, DRIVERS, type DriverId, HISTORICAL_ANALOGS, coherenceFindings } from "@shared/model";
 import { useTrajectoryStore } from "@/lib/store";
 import { AlertTriangle, Check, ChevronDown, ChevronRight, History, MessageSquareWarning, RotateCcw } from "lucide-react";
+import { CorrelationMatrix } from "@/components/CorrelationMatrix";
 
 /**
  * A "baked-in assumption" is a modeling choice the user can inspect and disagree with.
@@ -80,11 +81,8 @@ export default function Assumptions() {
             Assumption ledger
           </h1>
           <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Every scenario in Trajectory is built from three kinds of baked-in assumptions:
-            a <b>worldview</b>, the <b>driver relationships</b> (how each of the 12 drivers
-            pushes the scenario up or down), and <b>early indicators</b> (implicit predictions
-            about what we should see if the scenario is winning). Disagree with any and it will
-            be flagged in the ledger — a future update will fork the forecast on your dissents.
+            Each scenario rests on a worldview, a weight for each driver, and early indicators.
+            Mark the ones you disagree with.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -109,21 +107,20 @@ export default function Assumptions() {
         const findings = coherenceFindings();
         if (findings.length === 0) return null;
         return (
-          <Card className="border-amber-500/40 bg-amber-500/5" data-testid="card-coherence">
+          <Card className="border-warning/40 bg-warning/5" data-testid="card-coherence">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
+                <AlertTriangle className="h-4 w-4 text-warning" />
                 Structural findings ({findings.length})
               </CardTitle>
               <p className="text-xs text-muted-foreground mt-1">
-                Automatic coherence audit of the scenario–driver relationships. Findings do not mean the model is wrong,
-                but they mark spots where the modeling deserves human review.
+                Scenario–driver weights that look inconsistent. Worth a human check.
               </p>
             </CardHeader>
             <CardContent className="pt-0 space-y-2">
               {findings.map((f, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs" data-testid={`finding-${f.driverId}-${f.kind}`}>
-                  <Badge variant="outline" className="text-[10px] shrink-0 mt-0.5">
+                  <Badge variant="outline" className="text-[11px] shrink-0 mt-1">
                     {f.kind.replace("_", " ")}
                   </Badge>
                   <span className="text-muted-foreground">{f.detail}</span>
@@ -155,7 +152,7 @@ export default function Assumptions() {
                       style={{ backgroundColor: sc.color }}
                     />
                     <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base flex items-center gap-2">
+                      <CardTitle className="text-sm flex items-center gap-2">
                         {isOpen ? (
                           <ChevronDown className="h-4 w-4" />
                         ) : (
@@ -198,8 +195,7 @@ export default function Assumptions() {
                           Historical analogs
                         </div>
                         <p className="text-[11px] text-muted-foreground">
-                          Base-rate anchors — the closest past events a superforecaster would use as a prior. Use these
-                          to sanity-check the model’s probability against how similar-shaped stories have resolved before.
+                          Past events with a similar shape, for checking the probability against.
                         </p>
                         <div className="space-y-2">
                           {analogs.map((a, i) => (
@@ -207,7 +203,7 @@ export default function Assumptions() {
                               <div className="flex items-baseline gap-2 flex-wrap">
                                 <span className="font-medium">{a.name}</span>
                                 <span className="text-xs text-muted-foreground font-mono">{a.years}</span>
-                                <Badge variant="outline" className="text-[10px]">
+                                <Badge variant="outline" className="text-[11px]">
                                   base rate ~{(a.baseRate * 100).toFixed(0)}%
                                 </Badge>
                               </div>
@@ -230,7 +226,7 @@ export default function Assumptions() {
                       <div
                         key={row.key}
                         className={`rounded-md border p-3 space-y-2 ${
-                          flagged ? "border-orange-500/60 bg-orange-500/5" : "border-border"
+                          flagged ? "border-warning/60 bg-warning/5" : "border-border"
                         }`}
                         data-testid={`assumption-${sc.id}-${row.key}`}
                       >
@@ -239,7 +235,7 @@ export default function Assumptions() {
                             <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                               <span>{row.kind}</span>
                               {row.weight !== undefined && (
-                                <Badge variant="outline" className="text-[10px] h-4 px-1">
+                                <Badge variant="outline" className="text-[11px] h-4 px-1">
                                   weight {row.weight > 0 ? "+" : ""}
                                   {row.weight.toFixed(2)}
                                 </Badge>
@@ -270,7 +266,7 @@ export default function Assumptions() {
                           <Textarea
                             value={disagreements[key] ?? ""}
                             onChange={(e) => setDisagreementNote(sc.id, row.key, e.target.value)}
-                            placeholder="Why do you disagree? Your alternative view will fork the forecast in a future update."
+                            placeholder="Why do you disagree?"
                             className="text-sm"
                             rows={2}
                             data-testid={`textarea-disagree-${sc.id}-${row.key}`}
@@ -285,6 +281,7 @@ export default function Assumptions() {
           );
         })}
       </div>
+      <CorrelationMatrix />
     </div>
   );
 }

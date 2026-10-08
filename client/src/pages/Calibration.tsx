@@ -7,7 +7,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { SCENARIOS } from "../../../shared/model";
 import {
   LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend, CartesianGrid,
-  BarChart, Bar, ReferenceLine, Cell,
 } from "recharts";
 import type { ForecastHistoryRow, CalibrationResidual, BacktestRun } from "@shared/schema";
 import { LineChart as LineIcon, Info, RefreshCw, Play, GaugeCircle, ExternalLink, Download } from "lucide-react";
@@ -21,6 +20,22 @@ interface BacktestTrajectoryPoint {
   event: string;
 }
 
+interface Scorecard {
+  releases: {
+    score: { n: number; meanAbsErrorDays: number; meanBiasDays: number; intervalCoverage: number | null } | null;
+    resolved: Array<{ id: string }>;
+    pending: Array<{ id: string; name: string; predicted: number; overdue: boolean }>;
+  };
+  crowd: {
+    comparisons: Array<{
+      questionId: string; title: string; url: string;
+      ours: number | null; crowd: number | null; residual: number | null;
+      source: "live" | "snapshot" | null;
+    }>;
+    tokenConfigured: boolean;
+  };
+}
+
 export default function Calibration() {
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -29,9 +44,10 @@ export default function Calibration() {
   const { data: history = [], isLoading: histLoading } = useQuery<ForecastHistoryRow[]>({
     queryKey: ["/api/forecast-history"],
   });
-  const { data: residuals = [] } = useQuery<CalibrationResidual[]>({
+  const { data: residuals = [], isSuccess: residualsLoaded } = useQuery<CalibrationResidual[]>({
     queryKey: ["/api/calibration/residuals"],
   });
+  const { data: scorecard } = useQuery<Scorecard>({ queryKey: ["/api/calibration/scorecard"] });
   const { data: backtests = [] } = useQuery<BacktestRun[]>({
     queryKey: ["/api/backtest"],
   });
@@ -44,7 +60,8 @@ export default function Calibration() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/calibration/residuals"] });
-      toast({ title: "Residuals refreshed", description: `Compared ${data.refreshed} question(s) with Metaculus.` });
+      qc.invalidateQueries({ queryKey: ["/api/calibration/scorecard"] });
+      toast({ title: data.refreshed ? `Updated ${data.refreshed} comparison${data.refreshed === 1 ? "" : "s"}` : "No change" });
     },
     onError: (e: any) => toast({ title: "Refresh failed", description: e.message, variant: "destructive" as any }),
   });
@@ -53,12 +70,14 @@ export default function Calibration() {
   // and gives the calibration story teeth. Only fires once per session.
   const autoRefreshedRef = useRef(false);
   useEffect(() => {
-    if (!autoRefreshedRef.current && residuals.length === 0 && !refreshResiduals.isPending) {
+    // Wait for the query: the [] default reads as "empty" before it loads, which
+    // fired a refresh (and a toast) on every visit.
+    if (residualsLoaded && !autoRefreshedRef.current && residuals.length === 0 && !refreshResiduals.isPending) {
       autoRefreshedRef.current = true;
       refreshResiduals.mutate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [residuals.length]);
+  }, [residualsLoaded, residuals.length]);
 
   const runBacktest = useMutation({
     mutationFn: async () => {
@@ -67,7 +86,7 @@ export default function Calibration() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ["/api/backtest"] });
-      toast({ title: "Backtest complete", description: `Brier score: ${data.brierScore?.toFixed(3) ?? "n/a"} over ${data.eventCount} events.` });
+      toast({ title: `Replayed ${data.eventCount} events` });
     },
     onError: (e: any) => toast({ title: "Backtest failed", description: e.message, variant: "destructive" as any }),
   });
@@ -95,37 +114,105 @@ export default function Calibration() {
     } catch { /* ignore */ }
   }
 
-  // ---- Residual chart data (per-scenario latest residual) ----
-  const latestResidualsByScenario: Record<string, CalibrationResidual> = {};
-  for (const r of residuals) {
-    if (!latestResidualsByScenario[r.scenarioId] || r.timestamp > latestResidualsByScenario[r.scenarioId].timestamp) {
-      latestResidualsByScenario[r.scenarioId] = r;
-    }
-  }
-  const residualChartData = Object.values(latestResidualsByScenario).map(r => ({
-    label: r.metaculusQuestionTitle.length > 30 ? r.metaculusQuestionTitle.slice(0, 30) + "…" : r.metaculusQuestionTitle,
-    scenarioId: r.scenarioId,
-    ours: r.ourProbability * 100,
-    crowd: r.crowdProbability * 100,
-    residual: r.residual * 100,
-    url: r.metaculusUrl,
-  }));
-
   return (
-    <div className="p-3 sm:p-5 space-y-4 max-w-[1400px] mx-auto">
+    <div className="p-3 sm:p-6 space-y-4 max-w-[1400px] mx-auto">
       <div className="pb-2 border-b border-border">
         <h1 className="text-xl font-semibold tracking-tight" data-testid="page-title">Calibration</h1>
-        <div className="text-xs text-muted-foreground font-mono mt-0.5">
-          Are we right? · Compare against Metaculus + backtest history against 2024–2026 events
+        <div className="text-xs text-muted-foreground font-mono mt-1">
+          What can be checked today
         </div>
       </div>
 
+      {/* ---- Track record ---- */}
+      <Card className="p-4" data-testid="card-track-record">
+        <div className="flex items-center gap-2 mb-4">
+          <GaugeCircle className="w-3 h-3 text-accent" />
+          <h2 className="text-sm font-semibold">Track record</h2>
+          <Button
+            onClick={() => refreshResiduals.mutate()}
+            disabled={refreshResiduals.isPending}
+            size="sm"
+            variant="outline"
+            className="h-8 text-xs ml-auto"
+            data-testid="button-refresh-residuals"
+          >
+            <RefreshCw className={`w-3 h-3 mr-1 ${refreshResiduals.isPending ? "animate-spin" : ""}`} />
+            Refresh Metaculus
+          </Button>
+        </div>
+        <div className="divide-y divide-border text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-x-6 gap-y-1 py-3">
+            <div className="text-muted-foreground">Scenario outcomes</div>
+            <div>
+              <span className="font-medium" data-testid="text-accuracy-status">Not scoreable yet.</span>{" "}
+              <span className="text-muted-foreground">The scenarios describe 2028.</span>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-x-6 gap-y-1 py-3">
+            <div className="text-muted-foreground">Release-date calls</div>
+            <div className="space-y-2">
+              {scorecard?.releases.score ? (
+                <div className="font-mono tabular-nums">
+                  {scorecard.releases.score.n} resolved · off by {scorecard.releases.score.meanAbsErrorDays.toFixed(0)} days on average
+                  {scorecard.releases.score.intervalCoverage !== null &&
+                    <> · {(scorecard.releases.score.intervalCoverage * 100).toFixed(0)}% inside the 80% range</>}
+                </div>
+              ) : (
+                <div><span className="font-medium">None resolved.</span></div>
+              )}
+              {scorecard && scorecard.releases.pending.length > 0 && (
+                <ul className="space-y-1 text-xs">
+                  {scorecard.releases.pending.map(r => (
+                    <li key={r.id} className="flex items-center gap-3">
+                      <span className="w-40 truncate">{r.name}</span>
+                      <span className="font-mono tabular-nums text-muted-foreground">
+                        {new Date(r.predicted * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                      </span>
+                      {r.overdue && <span className="text-[11px] font-mono text-warning">overdue</span>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-x-6 gap-y-1 py-3">
+            <div className="text-muted-foreground">Metaculus</div>
+            <div className="space-y-2">
+              {scorecard?.crowd.comparisons.map(c => (
+                <div key={c.questionId} className="flex items-center gap-3 flex-wrap text-xs" data-testid={`crowd-${c.questionId}`}>
+                  <a href={c.url} target="_blank" rel="noreferrer" className="hover:text-accent inline-flex items-center gap-1 min-w-0">
+                    <span className="truncate">{c.title}</span>
+                    <ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
+                  </a>
+                  {c.residual !== null ? (
+                    <span className="font-mono tabular-nums text-muted-foreground">
+                      ours {(c.ours! * 100).toFixed(1)}% · crowd {(c.crowd! * 100).toFixed(1)}% ·{" "}
+                      <span className="text-foreground">{c.residual > 0 ? "+" : ""}{(c.residual * 100).toFixed(1)}pp</span>
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">no data</span>
+                  )}
+                  {c.source === "snapshot" && (
+                    <span className="text-[11px] font-mono px-2 rounded bg-warning/10 text-warning">stored value, not live</span>
+                  )}
+                </div>
+              ))}
+              {scorecard && !scorecard.crowd.tokenConfigured && (
+                <div className="text-xs text-muted-foreground">
+                  Set <span className="font-mono">METACULUS_API_TOKEN</span> to compare against live numbers.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </Card>
+
       {/* ---- Row 1: Drift chart ---- */}
       <Card className="p-4">
-        <div className="flex items-center gap-1.5 mb-3">
+        <div className="flex items-center gap-2 mb-3">
           <LineIcon className="w-3.5 h-3.5 text-accent" />
-          <h2 className="text-sm font-semibold">Probability Drift</h2>
-          <span className="text-[10px] font-mono text-muted-foreground ml-auto">
+          <h2 className="text-sm font-semibold">Forecast history</h2>
+          <span className="text-[11px] font-mono text-muted-foreground ml-auto">
             {chartData.length} snapshots
           </span>
           <button
@@ -141,7 +228,7 @@ export default function Calibration() {
               downloadCSV(`trajectory-forecast-history-${stamp}.csv`, toCSV(headers, rows));
             }}
             disabled={chartData.length === 0}
-            className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             data-testid="button-export-history-csv"
             title="Download forecast history as CSV"
           >
@@ -177,84 +264,13 @@ export default function Calibration() {
       </Card>
 
       {/* ---- Row 2: Metaculus residuals ---- */}
-      <Card className="p-4">
-        <div className="flex items-center gap-1.5 mb-3">
-          <GaugeCircle className="w-3.5 h-3.5 text-accent" />
-          <h2 className="text-sm font-semibold">Metaculus Residuals</h2>
-          <span className="text-[10px] font-mono text-muted-foreground ml-2">
-            our probability − crowd probability
-          </span>
-          <Button
-            onClick={() => refreshResiduals.mutate()}
-            disabled={refreshResiduals.isPending}
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs ml-auto"
-            data-testid="button-refresh-residuals"
-          >
-            <RefreshCw className={`w-3 h-3 mr-1 ${refreshResiduals.isPending ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
-        {residualChartData.length === 0 ? (
-          <div className="py-8 text-center text-xs text-muted-foreground space-y-2">
-            <div>No residuals yet.</div>
-            <div className="opacity-70">Click Refresh to pull the latest Metaculus crowd probabilities and score the delta against our model.</div>
-          </div>
-        ) : (
-          <>
-            <div style={{ height: Math.max(120, residualChartData.length * 44 + 40) }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={residualChartData} layout="vertical" margin={{ top: 5, right: 20, left: 20, bottom: 5 }} barSize={20}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                  <XAxis type="number" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" unit="pp" />
-                  <YAxis type="category" dataKey="label" tick={{ fontSize: 10 }} stroke="hsl(var(--muted-foreground))" width={180} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-                    formatter={(value: number) => `${value.toFixed(2)} pp`}
-                  />
-                  <ReferenceLine x={0} stroke="hsl(var(--foreground))" strokeDasharray="2 2" />
-                  <Bar dataKey="residual" maxBarSize={20}>
-                    {residualChartData.map((entry, i) => (
-                      <Cell key={i} fill={entry.residual > 0 ? "hsl(var(--accent))" : "hsl(0 84% 60%)"} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            {residualChartData.length < 3 && (
-              <div className="text-[10px] text-muted-foreground mt-1 italic">
-                Small sample — we currently track {residualChartData.length} Metaculus market{residualChartData.length === 1 ? "" : "s"}. Residuals are more meaningful once more scenarios have crowd analogues.
-              </div>
-            )}
-            <div className="space-y-1 mt-3 pt-3 border-t border-border/50">
-              {residualChartData.map(r => (
-                <div key={r.scenarioId} className="flex items-center justify-between text-xs" data-testid={`residual-${r.scenarioId}`}>
-                  <a href={r.url} target="_blank" rel="noreferrer" className="hover:text-accent flex items-center gap-1 min-w-0 flex-1">
-                    <span className="truncate">{r.label}</span>
-                    <ExternalLink className="w-2.5 h-2.5 opacity-60 shrink-0" />
-                  </a>
-                  <div className="flex items-center gap-3 font-mono text-[10px] tabular-nums shrink-0">
-                    <span>ours <span className="text-accent">{r.ours.toFixed(1)}%</span></span>
-                    <span>crowd <span>{r.crowd.toFixed(1)}%</span></span>
-                    <span className={r.residual > 0 ? "text-emerald-500" : "text-rose-500"}>
-                      {r.residual > 0 ? "+" : ""}{r.residual.toFixed(1)}pp
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-      </Card>
-
       {/* ---- Row 3: Backtest ---- */}
       <Card className="p-4">
-        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
           <Play className="w-3.5 h-3.5 text-accent" />
-          <h2 className="text-sm font-semibold">Backtest (2024–2026)</h2>
-          <span className="text-[10px] font-mono text-muted-foreground ml-2">
-            replay real events through the model
+          <h2 className="text-sm font-semibold">Historical replay</h2>
+          <span className="text-[11px] font-mono text-muted-foreground ml-2">
+            May 2024 – Mar 2026
           </span>
           <Button
             onClick={() => runBacktest.mutate()}
@@ -265,13 +281,13 @@ export default function Calibration() {
             data-testid="button-run-backtest"
           >
             <Play className="w-3 h-3 mr-1" />
-            {runBacktest.isPending ? "Running..." : "Run backtest"}
+            {runBacktest.isPending ? "Running…" : "Run replay"}
           </Button>
         </div>
 
         {!latestBacktest ? (
           <div className="py-8 text-center text-xs text-muted-foreground">
-            No backtest yet. Run one to replay 30+ real AI events (2024–2026) through the forecaster.
+            Not run yet.
           </div>
         ) : (
           <>
@@ -289,25 +305,23 @@ export default function Calibration() {
                   downloadCSV(`trajectory-backtest-${stamp}.csv`, toCSV(headers, rows));
                 }}
                 disabled={backtestTrajectory.length === 0}
-                className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1 text-[11px] font-mono text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 data-testid="button-export-backtest-csv"
                 title="Download backtest trajectory as CSV"
               >
                 <Download className="w-2.5 h-2.5" /> Export CSV
               </button>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2">
               <StatCard label="Events" value={latestBacktest.eventCount.toString()} />
-              <StatCard label="Brier score" value={latestBacktest.brierScore?.toFixed(3) ?? "—"} help="Lower = better calibration" />
-              <StatCard
-                label="Actual outcome"
-                value={SCENARIOS.find(s => s.id === latestBacktest.actualOutcomeScenario)?.name.split(" ")[0] || "—"}
-              />
               <StatCard
                 label="Run at"
                 value={new Date(latestBacktest.ranAt * 1000).toLocaleDateString()}
               />
             </div>
+            <p className="text-xs text-muted-foreground mb-4">
+              How the forecast would have moved through 31 hand-scored events. Shows behavior, not accuracy.
+            </p>
             {backtestTrajectory.length > 0 && (
               <div className="h-72">
                 <ResponsiveContainer width="100%" height="100%">
@@ -335,81 +349,19 @@ export default function Calibration() {
         )}
       </Card>
 
-      {/* ---- Methodology ---- */}
+      {/* ---- Method ---- */}
       <Card className="p-4">
-        <div className="flex items-center gap-1.5 mb-3">
-          <h2 className="text-sm font-semibold">Methodology</h2>
-        </div>
-        <div className="space-y-2 text-xs text-muted-foreground leading-relaxed">
-          <p>
-            <span className="text-foreground font-medium">Coupled forecasting.</span> Traditional forecasting platforms (Metaculus,
-            Manifold, Good Judgment) price questions <em>independently</em>. Our model treats scenarios as coupled systems where labor
-            displacement affects governance affects geopolitics affects alignment — capturing correlations they miss.
-          </p>
-          <p>
-            <span className="text-foreground font-medium">LLM signal analysis.</span> Each headline is analyzed by an LLM that reasons
-            about which of the 12 drivers it affects and by how much, with a self-reported confidence score. Impacts are
-            confidence-weighted before being applied to the model.
-          </p>
-          <p>
-            <span className="text-foreground font-medium">Source tiers.</span> Primary sources (labs, gov, wires) count fully;
-            secondary press at 0.7×; unknown at 0.4×; social-media noise is rejected. Every signal shows its tier and reasoning.
-          </p>
-          <p>
-            <span className="text-foreground font-medium">Backtest.</span> We replay real events from May 2024 onward through the
-            model and compute a Brier score for how well it predicted the trajectory we ended up on.
-          </p>
-          <p>
-            <span className="text-foreground font-medium">Auditable chains.</span> Every driver adjustment is traceable to a specific
-            signal with reasoning, entities, source tier, and confidence.
-          </p>
-        </div>
-      </Card>
-
-      {/* B10 — external forecaster reference points (Metaculus + Good Judgment Open) */}
-      <Card className="p-4" data-testid="card-external-forecasters">
-        <div className="flex items-center gap-1.5 mb-3">
-          <ExternalLink className="w-4 h-4 text-accent" />
-          <h2 className="text-sm font-semibold">External forecaster reference</h2>
-          <span className="text-[10px] font-mono text-muted-foreground ml-auto">crowd + platform priors</span>
-        </div>
-        <p className="text-xs text-muted-foreground mb-3">
-          Trajectory’s residuals table (above) tracks per-question distance from the Metaculus crowd on eight anchor questions.
-          These external platforms publish live forecasts on many of the same AI/geo/energy questions this model covers — use them as sanity checks and
-          as calibration priors alongside Trajectory’s output.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
-          <a
-            href="https://www.metaculus.com/questions/?categories=ai"
-            target="_blank"
-            rel="noreferrer"
-            className="p-2.5 rounded-md border border-border/50 bg-muted/20 hover:border-accent/50 transition-colors"
-            data-testid="link-metaculus"
-          >
-            <div className="font-medium flex items-center gap-1">Metaculus AI board <ExternalLink className="w-3 h-3 opacity-60" /></div>
-            <div className="text-muted-foreground mt-0.5">Aggregated median forecasts on frontier AI questions.</div>
-          </a>
-          <a
-            href="https://www.gjopen.com/"
-            target="_blank"
-            rel="noreferrer"
-            className="p-2.5 rounded-md border border-border/50 bg-muted/20 hover:border-accent/50 transition-colors"
-            data-testid="link-gjopen"
-          >
-            <div className="font-medium flex items-center gap-1">Good Judgment Open <ExternalLink className="w-3 h-3 opacity-60" /></div>
-            <div className="text-muted-foreground mt-0.5">Curated superforecaster questions on geopolitics, tech, and economics.</div>
-          </a>
-          <a
-            href="https://manifold.markets/browse?topic=ai"
-            target="_blank"
-            rel="noreferrer"
-            className="p-2.5 rounded-md border border-border/50 bg-muted/20 hover:border-accent/50 transition-colors"
-            data-testid="link-manifold"
-          >
-            <div className="font-medium flex items-center gap-1">Manifold AI markets <ExternalLink className="w-3 h-3 opacity-60" /></div>
-            <div className="text-muted-foreground mt-0.5">Play-money prediction markets with high AI-question coverage and daily churn.</div>
-          </a>
-        </div>
+        <h2 className="text-sm font-semibold mb-3">How it works</h2>
+        <dl className="grid grid-cols-1 sm:grid-cols-[200px_1fr] gap-x-6 gap-y-3 text-xs">
+          <dt className="text-muted-foreground">Signals</dt>
+          <dd>An LLM reads each headline and assigns signed impacts to the drivers it affects, plus a confidence.</dd>
+          <dt className="text-muted-foreground">Source weight</dt>
+          <dd>Primary 1.0, secondary 0.7, unknown 0.4. Social media is recorded but weighted 0.</dd>
+          <dt className="text-muted-foreground">Drivers</dt>
+          <dd>Sum of impact × confidence × source weight, halved every 30 days, mapped through a logistic.</dd>
+          <dt className="text-muted-foreground">Scenarios</dt>
+          <dd>Each scenario weights the 12 drivers. A softmax (τ = 1.5) turns the scores into probabilities.</dd>
+        </dl>
       </Card>
     </div>
   );
@@ -417,10 +369,10 @@ export default function Calibration() {
 
 function StatCard({ label, value, help }: { label: string; value: string; help?: string }) {
   return (
-    <div className="p-2.5 rounded-md border border-border/50 bg-muted/20" title={help}>
-      <div className="text-[9px] uppercase tracking-widest font-mono text-muted-foreground mb-0.5">{label}</div>
+    <div className="p-3 rounded-md border border-border/50 bg-muted/20" title={help}>
+      <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground mb-1">{label}</div>
       <div className="text-sm font-semibold tabular-nums" data-testid={`stat-${label.toLowerCase().replace(/\s+/g, "-")}`}>{value}</div>
-      {help && <div className="text-[9px] text-muted-foreground mt-0.5">{help}</div>}
+      {help && <div className="text-[11px] text-muted-foreground mt-1">{help}</div>}
     </div>
   );
 }
