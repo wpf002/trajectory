@@ -17,6 +17,7 @@ import {
   DEFAULT_DRIVER_VALUES,
   computeScenarioProbabilities,
   type DriverId,
+  aggregateDriverValues,
 } from "../shared/model";
 import { analyzeWithLLM, heuristicAnalyze, computeClusterKey, type AnalyzerResult } from "./analyzer";
 import { analyzeWithEnsemble, type EnsembleResult } from "./ensemble";
@@ -422,19 +423,22 @@ export async function registerRoutes(
   });
 
   function computeCurrentDrivers(): Record<DriverId, number> {
-    let values: Record<DriverId, number> = { ...DEFAULT_DRIVER_VALUES };
     const signals = storage.listSignals(1000);
+    const folded: Array<{ timestamp: number; impacts: Record<string, number> }> = [];
+    // listSignals returns newest-first; fold oldest-first so recency weighting
+    // and clamping see the same order the events happened in.
     for (const s of [...signals].reverse()) {
       // Skip rejected signals — recorded but not applied.
       if (s.sourceTier === "rejected") continue;
       try {
-        const impacts = JSON.parse(s.driverImpacts) as Record<string, number>;
-        values = applyImpacts(values, impacts);
+        folded.push({ timestamp: s.timestamp, impacts: JSON.parse(s.driverImpacts) });
       } catch {
         // ignore malformed
       }
     }
-    return values;
+    // Weighted by recency: see SIGNAL_HALF_LIFE_DAYS in shared/model.ts for why
+    // an unweighted running sum pegs drivers at 0 or 1 and freezes the forecast.
+    return aggregateDriverValues(folded);
   }
 
   app.get("/api/probabilities", async (_req, res) => {

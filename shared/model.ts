@@ -817,3 +817,90 @@ export function coherenceFindings(): CoherenceFinding[] {
   });
   return findings;
 }
+
+// ---------------------------------------------------------------------------
+// Signal recency weighting
+// ---------------------------------------------------------------------------
+
+/**
+ * Half-life in days for a signal's influence on driver values.
+ *
+ * Driver values are a clamped running sum of every signal's impact vector.
+ * Without decay that sum is a random walk against reflecting barriers at 0 and
+ * 1: at the observed rate (209 signals over 60 days, mean |impact| ~0.03) a
+ * driver reaching a rail stops responding to news entirely, and nothing can
+ * bring it back. Four of twelve drivers were pegged this way.
+ *
+ * 30 days keeps the forecast a nowcast of recent reporting while leaving older
+ * signals a visible tail. The choice is not load-bearing for the conclusion —
+ * the ranking of scenarios is identical anywhere from a 7-day to a 120-day
+ * half-life — so it is tuned for responsiveness, not to land on an answer.
+ */
+export const SIGNAL_HALF_LIFE_DAYS = Number(process.env.SIGNAL_HALF_LIFE_DAYS ?? 30);
+
+/** Recency weight in (0,1] for a signal `ageSeconds` old. 1.0 at age zero. */
+export function recencyWeight(ageSeconds: number, halfLifeDays = SIGNAL_HALF_LIFE_DAYS): number {
+  if (!(halfLifeDays > 0)) return 1; // 0 or negative disables decay
+  const ageDays = Math.max(0, ageSeconds) / 86400;
+  return Math.pow(2, -ageDays / halfLifeDays);
+}
+
+/**
+ * Fold a chronological list of signals into driver values, newest-last.
+ * `asOf` defaults to the newest signal so a stored history replays identically
+ * regardless of when it is recomputed.
+ */
+export function aggregateDriverValues(
+  signals: Array<{ timestamp: number; impacts: Record<string, number> }>,
+  opts: { asOf?: number; halfLifeDays?: number; base?: Record<DriverId, number> } = {},
+): Record<DriverId, number> {
+  const asOf = opts.asOf ?? signals.reduce((m, s) => Math.max(m, s.timestamp), 0);
+  const base = opts.base ?? DEFAULT_DRIVER_VALUES;
+
+  // Accumulate the full weighted sum per driver, then squash once.
+  //
+  // Two earlier shapes were both wrong. Clamping after every signal makes the
+  // fold path-dependent and throws evidence away: once a driver touches a rail
+  // the overshoot is gone, so a later run of weaker opposing signals moves it
+  // much further than the balance of evidence warrants (a stream summing to
+  // +1.197 could land on 0.000 purely from arrival order). Summing first and
+  // clamping once fixes that but makes the rail absorbing — a driver holding
+  // +5.0 of accumulated evidence needs -5.0 before it moves at all.
+  //
+  // Adding in log-odds space and mapping back through a logistic gives both:
+  // order-independent, no evidence discarded, and strictly monotone, so every
+  // signal always moves the value and 0 and 1 are approached but never reached.
+  const totals: Record<string, number> = {};
+  for (const s of signals) {
+    const w = recencyWeight(asOf - s.timestamp, opts.halfLifeDays);
+    for (const [k, delta] of Object.entries(s.impacts)) {
+      if (k in base && Number.isFinite(delta)) {
+        totals[k] = (totals[k] ?? 0) + delta * w;
+      }
+    }
+  }
+
+  const out: Record<DriverId, number> = { ...base };
+  for (const [k, total] of Object.entries(totals)) {
+    out[k as DriverId] = squash(out[k as DriverId], total);
+  }
+  return out;
+}
+
+/**
+ * Gain applied to the summed impact before it enters log-odds space.
+ *
+ * d(sigmoid)/dx is p(1-p) = 0.25 at the midpoint, so without this a 0.05 impact
+ * would move a mid-range driver by 0.0125 rather than the 0.05 the analyzer's
+ * scale is written against ("±0.05 = paradigm-shifting"). 4 restores the
+ * original sensitivity near 0.5 while keeping the ends asymptotic.
+ */
+const LOGIT_GAIN = 4;
+
+/** Nudge `base` by `delta` in log-odds space, staying strictly inside (0,1). */
+export function squash(base: number, delta: number): number {
+  const EPS = 1e-6;
+  const p = Math.max(EPS, Math.min(1 - EPS, base));
+  const logit = Math.log(p / (1 - p));
+  return 1 / (1 + Math.exp(-(logit + LOGIT_GAIN * delta)));
+}
