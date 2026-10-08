@@ -10,6 +10,7 @@
  * is reversible without re-running the analyzer.
  */
 import Database from "better-sqlite3";
+import { tierMultiplier, type SourceTier } from "../server/source-tiers";
 
 const db = new Database(process.env.DB_PATH || "data.db");
 const args = new Set(process.argv.slice(2));
@@ -41,8 +42,9 @@ if (REVERT) {
 
 const eligible = db.prepare(`
   SELECT r.signal_id, r.direction, r.magnitude, r.category, r.driver_impacts,
-         r.affects_drivers, r.reasoning, r.confidence, r.analyzer
-    FROM signal_reanalysis r WHERE r.error IS NULL`).all() as any[];
+         r.affects_drivers, r.reasoning, r.confidence, r.analyzer, s.source_tier
+    FROM signal_reanalysis r JOIN signals s ON s.id = r.signal_id
+   WHERE r.error IS NULL`).all() as any[];
 
 console.log(`${eligible.length} re-scored signals eligible for promotion.`);
 if (DRY) {
@@ -64,9 +66,14 @@ const run = db.transaction(() => {
     // signal_reanalysis stores driverImpacts as [{driver,impact}]; `signals`
     // stores the {driver: impact} object the rest of the app reads.
     const pairs = JSON.parse(r.driver_impacts || "{}");
-    const impacts = Array.isArray(pairs)
+    const raw: Record<string, number> = Array.isArray(pairs)
       ? Object.fromEntries(pairs.map((p: any) => [p.driver, p.impact]))
       : pairs;
+    // Store what the ingest route stores: impact x confidence x source-tier
+    // weight. Writing the raw analyzer output here over-weighted every promoted
+    // signal by 1/(confidence x tier), ~3.5x for an unknown-tier source.
+    const w = (r.confidence ?? 0.5) * tierMultiplier((r.source_tier ?? "unknown") as SourceTier);
+    const impacts = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, v * w]));
     upd.run(r.direction, r.magnitude, r.category, JSON.stringify(impacts),
             JSON.stringify(Object.keys(impacts)), r.reasoning, r.confidence, r.analyzer, r.signal_id);
   }
