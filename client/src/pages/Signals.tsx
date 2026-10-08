@@ -115,7 +115,10 @@ function StrengthBadge({ level }: { level: "weak" | "moderate" | "strong" }) {
   );
 }
 
+const PAGE = 50;
+
 export default function Signals() {
+  const [shown, setShown] = useState(PAGE);
   const { applySignalImpact } = useTrajectoryStore();
   const { toast } = useToast();
   const qc = useQueryClient();
@@ -499,8 +502,11 @@ export default function Signals() {
               </div>
             ) : (
               <div className="space-y-2">
-                {signals.map(s => {
+                {signals.slice(0, shown).map(s => {
                   const impacts = JSON.parse(s.driverImpacts) as Record<string, number>;
+                  const topDrivers = Object.entries(impacts)
+                    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+                    .slice(0, 2);
                   const Arrow = s.direction === "accelerating" ? ArrowUpRight : s.direction === "decelerating" ? ArrowDownRight : Minus;
                   const strength = strengthFor(s.magnitude);
                   return (
@@ -515,7 +521,7 @@ export default function Signals() {
                           setSelectedSignal(s);
                         }
                       }}
-                      className="w-full text-left flex items-start gap-3 p-3 rounded-md border border-border/50 hover:border-border hover:bg-muted/30 transition-colors cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent"
+                      className="group w-full text-left flex items-start gap-3 px-3 py-2 rounded-md hover:bg-muted/30 transition-colors cursor-pointer"
                       data-testid={`signal-${s.id}`}
                     >
                       <Arrow className={`w-3.5 h-3.5 mt-1 shrink-0 ${
@@ -524,9 +530,7 @@ export default function Signals() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
                           <div className="text-sm font-medium leading-tight flex-1">{s.title}</div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <TierBadge tier={s.sourceTier} />
-                            <StrengthBadge level={strength} />
+                          <div className="flex items-center gap-2 shrink-0 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
                             <button
                               onClick={e => { e.stopPropagation(); pinMutation.mutate({ id: s.id, pinned: !s.pinned }); }}
                               className={`transition-colors ${s.pinned ? "text-accent hover:text-accent/70" : "text-muted-foreground hover:text-foreground"}`}
@@ -547,53 +551,24 @@ export default function Signals() {
                           </div>
                         </div>
                         <div className="text-[11px] font-mono text-muted-foreground flex items-center gap-2 mt-1 flex-wrap">
-                          <span>{new Date(s.timestamp * 1000).toLocaleDateString()}</span>
+                          <span>{new Date(s.timestamp * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
                           <span>·</span>
-                          {s.source.startsWith("http") ? (
-                            <a href={s.source} target="_blank" rel="noreferrer" className="hover:text-accent flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                              {s.sourceDomain || "source"} <ExternalLink className="w-2.5 h-2.5" />
-                            </a>
-                          ) : (
-                            <span>{s.source}</span>
-                          )}
-                          <span>·</span>
-                          <span>{s.category}</span>
-                          <span>·</span>
-                          <span className="tabular-nums">mag {(s.magnitude * 100).toFixed(0)}</span>
-                          {typeof s.confidence === "number" && (
-                            <>
-                              <span>·</span>
-                              <span className="tabular-nums">conf {(s.confidence * 100).toFixed(0)}</span>
-                            </>
-                          )}
-                          {s.analyzer && (
-                            <>
-                              <span>·</span>
-                              <span className="opacity-70">{s.analyzer.startsWith("llm:") ? "LLM" : "heur"}</span>
-                            </>
-                          )}
-                        </div>
-                        {typeof s.confidence === "number" && (
-                          <div className="mt-2">
-                            <ConfidenceBar value={s.confidence} />
-                          </div>
-                        )}
-                        {s.reasoning && (
-                          <div className="mt-2 text-[11px] text-muted-foreground leading-relaxed line-clamp-2 hover:line-clamp-none" data-testid={`signal-reasoning-${s.id}`}>
-                            {s.reasoning}
-                          </div>
-                        )}
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {Object.entries(impacts).slice(0, 6).map(([driver, delta]) => (
-                            <Badge key={driver} variant="outline" className="text-[11px] font-mono">
+                          <span className="truncate max-w-[160px]">{s.sourceDomain || s.source}</span>
+                          {topDrivers.map(([driver, delta]) => (
+                            <span key={driver} className={delta > 0 ? "text-positive" : "text-negative"}>
                               {driver.replace(/_/g, " ")} {delta > 0 ? "+" : ""}{(delta * 100).toFixed(1)}
-                            </Badge>
+                            </span>
                           ))}
                         </div>
                       </div>
                     </div>
                   );
                 })}
+                {signals.length > shown && (
+                  <Button variant="ghost" size="sm" className="w-full text-xs" onClick={() => setShown(n => n + PAGE)}>
+                    Show {Math.min(PAGE, signals.length - shown)} more of {signals.length - shown}
+                  </Button>
+                )}
               </div>
             )}
           </Card>
