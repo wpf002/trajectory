@@ -37,6 +37,13 @@ interface CollectorStatus {
   totalSignals: number;
   tierAll: Record<string, number>;
   topDomains: Array<{ domain: string; tier: string; count: number; avgMagnitude: number; latest: number }>;
+  schedule?: {
+    enabled: boolean;
+    intervalMinutes: number;
+    lastRun: { ranAt: number } | null;
+    nextRunAt: number | null;
+    running: boolean;
+  };
 }
 
 interface CollectorRun {
@@ -64,6 +71,11 @@ const ROW_COLS = "md:grid-cols-[16px_minmax(0,1fr)_minmax(0,150px)_52px_minmax(0
 
 const driverLabel = (id: string) => DRIVERS.find(d => d.id === id)?.label ?? id.replace(/_/g, " ");
 const shortDate = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+/** "12m", "3h", "2d" */
+const span = (sec: number) => {
+  const s = Math.max(0, Math.round(sec));
+  return s < 3600 ? `${Math.max(1, Math.round(s / 60))}m` : s < 86400 ? `${Math.round(s / 3600)}h` : `${Math.round(s / 86400)}d`;
+};
 const signed = (v: number, digits = 1) => `${v > 0 ? "+" : ""}${(v * 100).toFixed(digits)}`;
 const parseImpacts = (s: Signal): Record<string, number> => {
   try { return JSON.parse(s.driverImpacts); } catch { return {}; }
@@ -132,8 +144,10 @@ export default function Signals() {
       const qs = params.toString();
       return (await apiRequest("GET", `/api/signals${qs ? "?" + qs : ""}`, undefined)).json();
     },
+    // The server collects on a schedule; pick up what it adds.
+    refetchInterval: 5 * 60_000,
   });
-  const status = useQuery<CollectorStatus>({ queryKey: ["/api/collectors/status"] });
+  const status = useQuery<CollectorStatus>({ queryKey: ["/api/collectors/status"], refetchInterval: 60_000 });
 
   // The server recomputes the forecast from stored signals, so every change
   // here only needs to refetch it.
@@ -216,12 +230,23 @@ export default function Signals() {
     downloadCSV(`trajectory-signals-${new Date().toISOString().slice(0, 10)}.csv`, toCSV(headers, rows));
   };
 
+  const schedule = status.data?.schedule;
+  const nowSec = Date.now() / 1000;
+  const updateStatus = !schedule ? null
+    : schedule.running || collect.isPending ? "Collecting"
+    : !schedule.enabled ? "Auto-update off"
+    : [
+        schedule.lastRun ? `Checked ${span(nowSec - schedule.lastRun.ranAt)} ago` : "Not checked yet",
+        schedule.nextRunAt ? `next in ${span(schedule.nextRunAt - nowSec)}` : null,
+      ].filter(Boolean).join(" · ");
+
   const tiers = status.data?.tierAll ?? {};
   const tierTotal = Object.values(tiers).reduce((a, b) => a + b, 0);
 
   return (
     <div className={PAGE_CLASS}>
       <PageHeader title="Signals">
+        {updateStatus && <span className="text-xs font-mono text-muted-foreground" data-testid="text-update-status">{updateStatus}</span>}
         <div className="inline-flex rounded-md border border-border p-1" role="tablist">
           {([["feed", "Feed"], ["sources", "Sources"], ["flow", "Flow"]] as const).map(([id, label]) => (
             <button
@@ -238,7 +263,7 @@ export default function Signals() {
         </div>
         <Button size="sm" variant="outline" className="h-8 text-xs gap-2" onClick={() => collect.mutate()} disabled={collect.isPending} data-testid="button-run-collectors">
           {collect.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-          {collect.isPending ? "Collecting" : "Run collectors"}
+          Check now
         </Button>
       </PageHeader>
 

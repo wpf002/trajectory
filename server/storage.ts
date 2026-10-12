@@ -150,6 +150,28 @@ ensureColumn("signals", "event_date", "INTEGER");
 ensureColumn("signals", "pinned", "INTEGER NOT NULL DEFAULT 0");
 ensureColumn("calibration_residuals", "crowd_source", "TEXT NOT NULL DEFAULT 'snapshot'");
 
+// Collector bookkeeping. seen_headlines is what stops a scheduled run from
+// paying to re-analyze a story it has already looked at; it records every
+// outcome, not only the headlines that became signals.
+sqlite.exec(`
+CREATE TABLE IF NOT EXISTS seen_headlines (
+  url TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  seen_at INTEGER NOT NULL,
+  action TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS seen_headlines_seen_at ON seen_headlines(seen_at);
+CREATE TABLE IF NOT EXISTS collector_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ran_at INTEGER NOT NULL,
+  trigger TEXT NOT NULL,
+  candidates INTEGER NOT NULL,
+  analyzed INTEGER NOT NULL,
+  applied INTEGER NOT NULL,
+  errors TEXT
+);
+`);
+
 // milestones and presets were created at boot but never read or written —
 // milestones are computed by forecastMilestones(), presets are PRESETS in
 // shared/model.ts. Drop them on existing installs, only while still empty.
@@ -268,6 +290,33 @@ export const storage = {
     return db.delete(backtestRuns).where(eq(backtestRuns.id, id)).run();
   },
 
+  // ---- Collector bookkeeping ----
+  markHeadlineSeen(url: string, title: string, action: string, at: number) {
+    sqlite.prepare("INSERT OR IGNORE INTO seen_headlines (url, title, seen_at, action) VALUES (?, ?, ?, ?)").run(url, title, at, action);
+  },
+  /** URLs ever seen, plus titles from the recent window for same-story matching. */
+  seenHeadlines(titlesSince: number): { urls: Set<string>; titles: string[] } {
+    const urls = new Set((sqlite.prepare("SELECT url FROM seen_headlines").all() as Array<{ url: string }>).map(r => r.url));
+    const seenTitles = (sqlite.prepare("SELECT title FROM seen_headlines WHERE seen_at >= ?").all(titlesSince) as Array<{ title: string }>).map(r => r.title);
+    // Signals ingested before this table existed count as seen too.
+    const signalTitles = (sqlite.prepare("SELECT title FROM signals WHERE timestamp >= ?").all(titlesSince) as Array<{ title: string }>).map(r => r.title);
+    return { urls, titles: [...seenTitles, ...signalTitles] };
+  },
+  /** Analyzer calls made by collector runs since `since` (the daily budget). */
+  analyzedSince(since: number, triggers: string[]): number {
+    const marks = triggers.map(() => "?").join(",");
+    const row = sqlite.prepare(`SELECT COALESCE(SUM(analyzed), 0) n FROM collector_runs WHERE ran_at >= ? AND trigger IN (${marks})`).get(since, ...triggers) as { n: number };
+    return row.n;
+  },
+  addCollectorRun(run: { ranAt: number; trigger: string; candidates: number; analyzed: number; applied: number; errors: string | null }) {
+    sqlite.prepare("INSERT INTO collector_runs (ran_at, trigger, candidates, analyzed, applied, errors) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(run.ranAt, run.trigger, run.candidates, run.analyzed, run.applied, run.errors);
+  },
+  lastCollectorRun(): { ranAt: number; trigger: string; candidates: number; analyzed: number; applied: number; errors: string | null } | null {
+    const r = sqlite.prepare("SELECT ran_at AS ranAt, trigger, candidates, analyzed, applied, errors FROM collector_runs ORDER BY ran_at DESC, id DESC LIMIT 1").get() as any;
+    return r ?? null;
+  },
+
   // ---- Watchlist ----
   listWatchlist(): WatchlistItem[] {
     return db.select().from(watchlistItems).orderBy(desc(watchlistItems.createdAt)).all();
@@ -280,9 +329,6 @@ export const storage = {
   },
   deleteWatchlist(id: number) {
     return db.delete(watchlistItems).where(eq(watchlistItems.id, id)).run();
-  },
-  updateWatchlistTriggered(id: number, ts: number) {
-    return db.update(watchlistItems).set({ lastTriggeredAt: ts }).where(eq(watchlistItems.id, id)).run();
   },
 
   // ---- Portfolio holdings ----

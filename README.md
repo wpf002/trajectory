@@ -65,21 +65,42 @@ cp .env.example .env   # then fill in ANTHROPIC_API_KEY
 
 ## Collectors
 
-`POST /api/collectors/run` (or Run collectors on the Signals page) pulls from three live,
-keyless sources:
+While the server is running it collects on its own: every `COLLECT_INTERVAL_MINUTES`
+(default 60) it pulls from four keyless sources, and on startup it runs straight away if
+the last run is older than that.
 
+- **News** — Google News RSS, eight searches covering the areas the drivers track. Each
+  item carries its publisher (for source tiering) and publish time (stored as the signal's
+  timestamp).
 - **Hacker News** — top stories over 100 points, filtered to AI/tech topics.
 - **arXiv** — newest `cs.AI` / `cs.LG` / `cs.CL` submissions via the ATOM API.
-- **FRED** — three macro series read from the St. Louis Fed's keyless CSV export
-  (utility output, computer-systems-design employment, semiconductor producer prices),
-  each reported as a year-over-year change. These series are not seasonally adjusted, so
-  year-over-year is the comparison that holds; a trailing-mean baseline would just
-  re-report summer air-conditioning load as an energy signal.
+- **FRED** — three macro series from the St. Louis Fed's keyless CSV export (utility
+  output, computer-systems-design employment, semiconductor producer prices), each as a
+  year-over-year change, since the series are not seasonally adjusted.
 
-Every source is tiered (`server/source-tiers.ts`) — primary, secondary, unknown, rejected —
-and the tier scales the confidence attached to the signal. Rejected sources are recorded
-but weighted to zero. Ingest deduplicates by cluster key, so the same story from several
-outlets counts once.
+A run does not analyze everything it finds (`server/headline-select.ts`). It drops what
+earlier runs already looked at, groups rewrites of the same story, ranks stories by how
+many outlets carried them, and sends the top `COLLECT_MAX_PER_RUN` (default 2) to the
+analyzer, up to `COLLECT_MAX_PER_DAY` (default 6) in any 24 hours. The cap is deliberate:
+driver values are a sum over signals, so the forecast moves with how many headlines are
+ingested as well as what they say, and the archive was built at about 3.5 a day. At the
+defaults a day costs about $0.10 in analyzer calls.
+
+Scheduled runs need `ANTHROPIC_API_KEY`; without it the schedule idles, because keyword
+scoring gets direction wrong too often to run unattended. **Check now** on the Signals page
+(`POST /api/collectors/run`) runs a pass by hand and analyzes up to 5 stories.
+
+Sources are tiered (`server/source-tiers.ts`): primary, secondary, unknown, rejected. The
+tier scales each signal's weight; rejected sources are skipped. A story from a single
+unknown-tier outlet is not analyzed.
+
+To fill a gap after the server has been off:
+
+```bash
+npx tsx script/backfill-news.ts --from 2026-09-01 --to 2026-10-10 --dry-run
+```
+
+Drop `--dry-run` to analyze and store the stories it lists.
 
 ## Scripts
 
@@ -99,7 +120,8 @@ outlets counts once.
 CI runs typecheck, tests, and build on every push and PR (`.github/workflows/ci.yml`).
 
 `cron/daily_update.sh` starts the server if it isn't running, then runs the collectors and
-evaluates the watchlist. Point a daily cron at it to keep the forecast advancing.
+evaluates the watchlist. Use it if you want collection to happen when the app isn't open;
+otherwise the built-in schedule covers it.
 
 ## Layout
 
@@ -110,7 +132,9 @@ server/app.ts          Express app + error handling (used by index.ts and the te
 server/routes.ts       the whole HTTP API
 server/analyzer.ts     LLM analyzer + keyword fallback + cluster keys
 server/ensemble.ts     3-variant ensemble analyzer
-server/collectors.ts   HN / arXiv / FRED collectors
+server/collectors.ts   news / HN / arXiv / FRED collectors
+server/headline-select.ts  which collected stories get analyzed
+server/scheduler.ts    runs the collectors on an interval
 server/regime.ts       regime-change detection over driver history
 server/backtest-events.ts  2024–2026 event set replayed by the backtester
 shared/model.ts        drivers, scenarios, milestones, correlations — the model itself
@@ -128,6 +152,9 @@ Routing is hash-based (`/#/signals`), so the built client works from a static ho
 | `ANALYZER_MODEL` | `claude-opus-5` | Model used for signal analysis |
 | `METACULUS_API_TOKEN` | — | Live Metaculus numbers. Without it the comparison uses a stored value and says so |
 | `SIGNAL_HALF_LIFE_DAYS` | `30` | How fast old signals fade |
+| `COLLECT_INTERVAL_MINUTES` | `60` | Minutes between collection runs; `0` turns the schedule off |
+| `COLLECT_MAX_PER_RUN` | `2` | Stories a scheduled run may analyze |
+| `COLLECT_MAX_PER_DAY` | `6` | Analyzer calls scheduled runs may make per 24 hours |
 | `DB_PATH` | `data.db` | SQLite file |
 | `PORT` | `5000` | Server port |
 | `HOST` | `0.0.0.0` | Bind address |

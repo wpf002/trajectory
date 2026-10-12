@@ -16,20 +16,30 @@ process.env.DB_PATH = join(dir, "test.db");
 delete process.env.METACULUS_API_TOKEN;
 delete process.env.ANTHROPIC_API_KEY;
 
+/** What the stubbed news feed returns; tests swap it to simulate new headlines. */
+let newsXml = "<rss><channel></channel></rss>";
+const rssItem = (title: string, publisher: string, domain: string, pubDate: string) =>
+  `<item><title>${title} - ${publisher}</title><link>https://news.google.com/rss/articles/${encodeURIComponent(title + publisher)}</link>` +
+  `<pubDate>${pubDate}</pubDate><source url="https://www.${domain}">${publisher}</source></item>`;
+
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: any, init?: any) => {
   const url = typeof input === "string" ? input : input?.url ?? String(input);
-  if (/metaculus\.com|manifold\.markets/.test(url)) return new Response("forbidden", { status: 403 });
+  if (/news\.google\.com/.test(url)) return new Response(newsXml, { status: 200 });
+  // Every other outside host is down, which is also what each collector must survive.
+  if (/metaculus\.com|manifold\.markets|hacker-news|arxiv\.org|stlouisfed\.org/.test(url)) return new Response("forbidden", { status: 403 });
   return realFetch(input, init);
 }) as typeof fetch;
 
 let base = "";
 let shutdown: () => void = () => {};
+let locals: any = {};
 
 before(async () => {
   // Imported after DB_PATH is set: storage opens the database at import time.
   const { createApp } = await import("./app");
-  const { httpServer } = await createApp({ requestLog: false });
+  const { app, httpServer } = await createApp({ requestLog: false });
+  locals = app.locals;
   await new Promise<void>(resolve => httpServer.listen(0, "127.0.0.1", resolve));
   const addr = httpServer.address() as { port: number };
   base = `http://127.0.0.1:${addr.port}`;
@@ -231,4 +241,58 @@ test("analyze returns the weighted impacts a client should store", async () => {
   assert.ok(keys.length > 0, "fixture should match at least one keyword rule");
   const w = data.confidence * tierMultiplier(data.sourceTier);
   for (const k of keys) assert.ok(Math.abs(data.weightedImpacts[k] - data.driverImpacts[k] * w) < 1e-12);
+});
+
+test("collectors: one analysis per story, publish time kept, nothing re-analyzed", async () => {
+  const published = "Sat, 10 Oct 2026 09:00:00 GMT";
+  newsXml = `<rss><channel>
+    ${rssItem("US announces new export controls on advanced AI chips", "Reuters", "reuters.com", published)}
+    ${rssItem("New US export controls on advanced AI chips announced", "CNBC", "cnbc.com", published)}
+    ${rssItem("Tech layoffs accelerate as AI automation replaces jobs", "Bloomberg", "bloomberg.com", published)}
+  </channel></rss>`;
+
+  const first = (await api("POST", "/api/collectors/run", {})).data;
+  // Eight queries return the same three items; two stories come out.
+  assert.equal(first.candidates, 2);
+  assert.equal(first.processed.length, 2);
+  // HN, arXiv and FRED are down in this test; the run goes ahead on news alone.
+  assert.equal(first.collected.hn, 0);
+  assert.ok(first.collected.news > 0);
+  const applied = first.processed.filter((p: any) => p.action === "applied");
+  assert.ok(applied.length >= 1, "fixture should produce at least one signal");
+
+  const stored = (await api("GET", "/api/signals")).data.find((sig: any) => sig.title === applied[0].title);
+  assert.equal(stored.timestamp, Date.parse(published) / 1000);
+  assert.ok(stored.source.startsWith("https://news.google.com/"));
+
+  const second = (await api("POST", "/api/collectors/run", {})).data;
+  assert.equal(second.candidates, 0);
+  assert.equal(second.processed.length, 0);
+
+  const status = (await api("GET", "/api/collectors/status")).data.schedule;
+  assert.equal(status.lastRun.trigger, "manual");
+  assert.equal(status.enabled, false, "no API key in tests, so the schedule is idle");
+});
+
+test("a scheduled run leaves a headline unseen when the analyzer is unavailable", async () => {
+  newsXml = `<rss><channel>${rssItem("Regulators approve sweeping AI safety law after long debate", "Reuters", "reuters.com", "Sun, 11 Oct 2026 09:00:00 GMT")}</channel></rss>`;
+  // No key: the LLM call fails, and scheduled runs don't fall back to keywords.
+  const run = await locals.runCollectors({ trigger: "schedule" });
+  assert.equal(run.processed.length, 1);
+  assert.equal(run.processed[0].action, "failed");
+  // Still a candidate for the next run.
+  const again = await locals.runCollectors({ trigger: "schedule" });
+  assert.equal(again.candidates, 1);
+});
+
+test("scheduled runs stop at the daily budget", async () => {
+  const before = (await api("GET", "/api/collectors/status")).data.schedule;
+  process.env.COLLECT_MAX_PER_DAY = String(before.analyzedToday); // budget exactly used
+  try {
+    const run = await locals.runCollectors({ trigger: "schedule" });
+    assert.equal(run.note, "daily budget used");
+    assert.equal(run.processed.length, 0);
+  } finally {
+    delete process.env.COLLECT_MAX_PER_DAY;
+  }
 });

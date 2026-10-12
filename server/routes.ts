@@ -24,7 +24,8 @@ import { analyzeWithLLM, heuristicAnalyze, computeClusterKey, type AnalyzerResul
 import { analyzeWithEnsemble, type EnsembleResult } from "./ensemble";
 import { classifySource, tierMultiplier } from "./source-tiers";
 import { HISTORICAL_EVENTS, eventsChronological, unixSecondsForDate } from "./backtest-events";
-import { collectAll, tierBreakdown, type RawHeadline } from "./collectors";
+import { collectAll, tierBreakdown, type RawHeadline, type NewsWindow } from "./collectors";
+import { selectStories } from "./headline-select";
 import { detectRegime } from "./regime";
 
 /**
@@ -465,18 +466,17 @@ export async function registerRoutes(
   });
 
   // ---- Ingest (batch, cron entry point) ----
-  app.post("/api/ingest", async (req, res) => {
-    const body = z.object({
-      headlines: z.array(z.object({
-        title: z.string(),
-        source: z.string().optional(),
-        url: z.string().optional(),
-        text: z.string(),
-      })).min(1).max(50),
-      useLLM: z.boolean().optional().default(true),
-      useEnsemble: z.boolean().optional().default(false),
-    }).parse(req.body);
+  interface IngestOptions {
+    useLLM: boolean;
+    useEnsemble: boolean;
+    /** On analyzer failure: score with keyword rules (true) or leave the headline for a later run (false). */
+    heuristicFallback: boolean;
+    /** Write a forecast_history snapshot afterwards. Off for backfills, which insert past-dated signals. */
+    snapshot: boolean;
+  }
 
+  /** Analyze headlines, store the ones that move a driver, and record every outcome as seen. */
+  async function ingestHeadlines(headlines: RawHeadline[], body: IngestOptions) {
     const nowSec = Math.floor(Date.now() / 1000);
     const twelveHoursSec = 12 * 60 * 60;
     const dedupWindowSec = 7 * 24 * 60 * 60; // 7 days
@@ -500,12 +500,17 @@ export async function registerRoutes(
       sourceDomain: string;
       impacts: Record<string, number>;
       weightedImpacts: Record<string, number>;
-      action: "applied" | "dedup" | "rejected" | "no-impact";
+      action: "applied" | "dedup" | "rejected" | "no-impact" | "failed";
     }> = [];
 
-    for (const h of body.headlines) {
-      const sourceRef = h.url || h.source;
+    for (const h of headlines) {
+      // An aggregator link says nothing about the publisher; prefer its own URL.
+      const sourceRef = h.sourceUrl || h.url || h.source;
       const { tier, domain } = classifySource(sourceRef);
+      // Publish time when the feed gives one, so recency weighting is right for
+      // items collected late (and for backfills).
+      const ts = h.publishedAt ? Math.min(h.publishedAt, nowSec) : nowSec;
+      const seenKey = h.url || `title:${h.title}`;
 
       // Rejected sources: skip completely (don't spend LLM tokens).
       if (tier === "rejected") {
@@ -521,6 +526,7 @@ export async function registerRoutes(
           weightedImpacts: {},
           action: "rejected",
         });
+        storage.markHeadlineSeen(seenKey, h.title, "rejected", nowSec);
         continue;
       }
 
@@ -535,6 +541,15 @@ export async function registerRoutes(
           analysis = heuristicAnalyze(`${h.title}. ${h.text}`);
         }
       } catch (e: any) {
+        if (!body.heuristicFallback) {
+          // Not marked seen, so the next run tries it again.
+          console.error("[ingest] analyzer failed on '" + h.title.slice(0, 60) + "':", e.message);
+          processed.push({
+            title: h.title, direction: "neutral", magnitude: 0, confidence: 0, analyzer: "n/a",
+            sourceTier: tier, sourceDomain: domain, impacts: {}, weightedImpacts: {}, action: "failed",
+          });
+          continue;
+        }
         console.error("[ingest] LLM failed on '" + h.title.slice(0, 60) + "', fallback:", e.message);
         analysis = heuristicAnalyze(`${h.title}. ${h.text}`);
       }
@@ -553,12 +568,13 @@ export async function registerRoutes(
           weightedImpacts: {},
           action: "no-impact",
         });
+        storage.markHeadlineSeen(seenKey, h.title, "no-impact", nowSec);
         continue;
       }
 
       // Dedup: compute cluster key and check recent history.
       const clusterKey = computeClusterKey(h.title, analysis.entities);
-      const dup = storage.findSignalByClusterKey(clusterKey, nowSec - dedupWindowSec);
+      const dup = storage.findSignalByClusterKey(clusterKey, ts - dedupWindowSec);
       if (dup) {
         processed.push({
           title: h.title,
@@ -572,6 +588,7 @@ export async function registerRoutes(
           weightedImpacts: {},
           action: "dedup",
         });
+        storage.markHeadlineSeen(seenKey, h.title, "dedup", nowSec);
         continue;
       }
 
@@ -580,14 +597,14 @@ export async function registerRoutes(
 
       storage.addSignal({
         title: h.title,
-        source: h.source || h.url || "news",
+        source: h.url || h.source || "news",
         category: analysis.category,
         direction: analysis.direction,
         magnitude: analysis.magnitude,
         summary: h.text,
         affectsDrivers: JSON.stringify(Object.keys(weighted)),
         driverImpacts: JSON.stringify(weighted),
-        timestamp: nowSec,
+        timestamp: ts,
         userAdded: false,
         reasoning: analysis.reasoning,
         confidence: analysis.confidence,
@@ -595,8 +612,9 @@ export async function registerRoutes(
         sourceTier: tier,
         sourceDomain: domain,
         clusterKey,
-        eventDate: analysis.eventDate ?? nowSec,
+        eventDate: analysis.eventDate ?? ts,
       });
+      storage.markHeadlineSeen(seenKey, h.title, "applied", nowSec);
 
       processed.push({
         title: h.title,
@@ -617,14 +635,17 @@ export async function registerRoutes(
     const probs = computeScenarioProbabilities(values);
     const snap = JSON.stringify(values);
     const shifts: Array<{ scenarioId: string; name: string; today: number; yesterday: number | null; deltaPp: number; }> = [];
+    const changed = processed.some(p => p.action === "applied");
     for (const p of probs) {
-      storage.addForecastHistory({
-        scenarioId: p.id,
-        probability: p.probability,
-        timestamp: nowSec,
-        driverSnapshot: snap,
-        triggerSignalId: null,
-      });
+      if (body.snapshot && changed) {
+        storage.addForecastHistory({
+          scenarioId: p.id,
+          probability: p.probability,
+          timestamp: nowSec,
+          driverSnapshot: snap,
+          triggerSignalId: null,
+        });
+      }
       const y = priorByScenario[p.id] ?? null;
       const deltaPp = y === null ? 0 : (p.probability - y) * 100;
       shifts.push({
@@ -636,83 +657,159 @@ export async function registerRoutes(
       });
     }
 
-    const significant = shifts.filter(s => Math.abs(s.deltaPp) >= 5);
-
-    // Watchlist threshold check — mark items that crossed today.
-    const watchlist = storage.listWatchlist();
     const probsById: Record<string, number> = {};
     for (const p of probs) probsById[p.id] = p.probability;
-    const triggered: Array<{
-      id: number;
-      scenarioId: string;
-      scenarioName: string;
-      op: string;
-      thresholdPct: number;
-      currentPct: number;
-      note: string | null;
-    }> = [];
-    for (const w of watchlist) {
-      const cur = (probsById[w.scenarioId] ?? 0) * 100;
-      const crossed = w.op === "gt" ? cur >= w.thresholdPct : cur <= w.thresholdPct;
-      if (!crossed) continue;
-      // Debounce: only re-trigger if last trigger was > 20h ago.
-      if (w.lastTriggeredAt && nowSec - w.lastTriggeredAt < 20 * 3600) continue;
-      storage.updateWatchlistTriggered(w.id, nowSec);
-      triggered.push({
-        id: w.id,
-        scenarioId: w.scenarioId,
-        scenarioName: SCENARIOS.find(s => s.id === w.scenarioId)?.name || w.scenarioId,
-        op: w.op,
-        thresholdPct: w.thresholdPct,
-        currentPct: cur,
-        note: w.note ?? null,
-      });
-    }
 
-    res.json({
+    return {
       processed,
       probabilities: probs,
       driverValues: values,
       shifts,
-      significantShifts: significant,
-      triggeredWatchlist: triggered,
+      significantShifts: shifts.filter(s => Math.abs(s.deltaPp) >= 5),
+      triggeredWatchlist: evaluateWatchlist(probsById, nowSec).filter(t => t.newlyTriggered),
       snapshotDate: new Date(nowSec * 1000).toISOString(),
-    });
+    };
+  }
+
+  /**
+   * Check every alert against the forecast. lastTriggeredAt means "crossed
+   * since": set the first time an alert is found crossed, cleared when it
+   * uncrosses so it re-arms. Returns the alerts crossed right now.
+   */
+  function evaluateWatchlist(probsById: Record<string, number>, nowSec: number) {
+    const crossedNow: Array<{
+      id: number; scenarioId: string; scenarioName: string; op: string; thresholdPct: number;
+      currentPct: number; note: string | null; lastTriggeredAt: number | null; newlyTriggered: boolean;
+    }> = [];
+    for (const w of storage.listWatchlist()) {
+      const cur = (probsById[w.scenarioId] ?? 0) * 100;
+      const crossed = w.op === "gt" ? cur >= w.thresholdPct : cur <= w.thresholdPct;
+      const newlyTriggered = crossed && w.lastTriggeredAt == null;
+      if (newlyTriggered) {
+        storage.setWatchlistTriggered(w.id, nowSec);
+        w.lastTriggeredAt = nowSec;
+      } else if (!crossed && w.lastTriggeredAt != null) {
+        storage.setWatchlistTriggered(w.id, null);
+      }
+      if (crossed) {
+        crossedNow.push({
+          id: w.id,
+          scenarioId: w.scenarioId,
+          scenarioName: SCENARIOS.find(s => s.id === w.scenarioId)?.name || w.scenarioId,
+          op: w.op,
+          thresholdPct: w.thresholdPct,
+          currentPct: cur,
+          note: w.note ?? null,
+          lastTriggeredAt: w.lastTriggeredAt,
+          newlyTriggered,
+        });
+      }
+    }
+    return crossedNow;
+  }
+
+  app.post("/api/ingest", async (req, res) => {
+    const body = z.object({
+      headlines: z.array(z.object({
+        title: z.string(),
+        source: z.string().optional(),
+        url: z.string().optional(),
+        text: z.string(),
+      })).min(1).max(50),
+      useLLM: z.boolean().optional().default(true),
+      useEnsemble: z.boolean().optional().default(false),
+    }).parse(req.body);
+    res.json(await ingestHeadlines(
+      body.headlines.map(h => ({ title: h.title, source: h.source ?? "", url: h.url ?? "", text: h.text })),
+      { useLLM: body.useLLM, useEnsemble: body.useEnsemble, heuristicFallback: true, snapshot: true },
+    ));
   });
 
-  // ---- Multi-source collectors (D15) ----
-  // Runs HN + ArXiv + FRED collectors, forwards batch to /api/ingest logic.
-  app.post("/api/collectors/run", async (req, res) => {
-    const useLLM = req.body?.useLLM !== false;
-    const collected = await collectAll();
-    if (collected.headlines.length === 0) {
-      return res.json({
-        ok: true,
-        collected: collected.byCollector,
-        errors: collected.errors,
-        processed: [],
-        note: "no headlines returned by any collector",
-      });
-    }
-    // Forward internally via HTTP so we reuse the full ingest pipeline.
-    const port = process.env.PORT || "5000";
-    const url = `http://127.0.0.1:${port}/api/ingest`;
+  // ---- Collectors ----
+  const DAY_SEC = 86400;
+  const collectorConfig = () => ({
+    /** Minutes between scheduled runs. 0 turns the schedule off. */
+    intervalMinutes: Number(process.env.COLLECT_INTERVAL_MINUTES ?? 60),
+    /** Stories a scheduled run may send to the analyzer. */
+    maxPerRun: Number(process.env.COLLECT_MAX_PER_RUN ?? 2),
+    /** Analyzer calls scheduled runs may make per rolling 24 hours. */
+    maxPerDay: Number(process.env.COLLECT_MAX_PER_DAY ?? 6),
+  });
+  const SCHEDULED = ["schedule", "startup"];
+  let collecting = false;
+
+  /**
+   * One collection pass: fetch every source, drop what has been seen, group
+   * rewrites of the same story, and analyze the most widely covered few.
+   * Scheduled runs are held to the daily budget and never fall back to keyword
+   * scoring; a manual run takes up to 5 regardless.
+   */
+  async function runCollectors(opts: {
+    trigger: "schedule" | "startup" | "manual" | "backfill";
+    useLLM?: boolean;
+    newsWindow?: NewsWindow;
+    maxNew?: number;
+  }) {
+    if (collecting) return { ok: false as const, busy: true as const };
+    collecting = true;
     try {
-      const r = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ headlines: collected.headlines, useLLM }),
+      const nowSec = Math.floor(Date.now() / 1000);
+      const cfg = collectorConfig();
+      const scheduled = SCHEDULED.includes(opts.trigger);
+      let budget = opts.maxNew ?? (scheduled ? cfg.maxPerRun : 5);
+      if (scheduled) budget = Math.min(budget, Math.max(0, cfg.maxPerDay - storage.analyzedSince(nowSec - DAY_SEC, SCHEDULED)));
+      if (budget <= 0) {
+        storage.addCollectorRun({ ranAt: nowSec, trigger: opts.trigger, candidates: 0, analyzed: 0, applied: 0, errors: null });
+        return { ok: true as const, collected: {}, collectorErrors: {}, candidates: 0, processed: [], note: "daily budget used" };
+      }
+
+      const collected = await collectAll({ newsWindow: opts.newsWindow, newsOnly: opts.trigger === "backfill" });
+      const { chosen, candidates } = selectStories(collected.headlines, storage.seenHeadlines(nowSec - 14 * DAY_SEC), budget);
+
+      const result = chosen.length === 0 ? null : await ingestHeadlines(chosen.map(st => st.lead), {
+        useLLM: opts.useLLM !== false,
+        useEnsemble: false,
+        heuristicFallback: opts.trigger === "manual",
+        snapshot: opts.trigger !== "backfill",
       });
-      const json = await r.json();
-      res.json({
-        ok: true,
+      const processed = result?.processed ?? [];
+      // The other outlets' copies of an analyzed story are covered by it.
+      for (const story of chosen) {
+        const outcome = processed.find(p => p.title === story.lead.title);
+        if (!outcome || outcome.action === "failed") continue;
+        for (const m of story.members.slice(1)) storage.markHeadlineSeen(m.url, m.title, "covered", nowSec);
+      }
+
+      const analyzed = processed.filter(p => p.action !== "failed" && p.action !== "rejected").length;
+      const applied = processed.filter(p => p.action === "applied").length;
+      storage.addCollectorRun({
+        ranAt: nowSec,
+        trigger: opts.trigger,
+        candidates,
+        analyzed,
+        applied,
+        errors: Object.keys(collected.errors).length ? JSON.stringify(collected.errors) : null,
+      });
+      return {
+        ok: true as const,
         collected: collected.byCollector,
         collectorErrors: collected.errors,
-        ...json,
-      });
-    } catch (e: any) {
-      res.status(500).json({ error: "internal ingest failed", detail: e.message });
+        candidates,
+        ...(result ?? {}),
+        processed,
+      };
+    } finally {
+      collecting = false;
     }
+  }
+  // index.ts drives the schedule; tests and scripts call these directly.
+  app.locals.runCollectors = runCollectors;
+  app.locals.collectorConfig = collectorConfig;
+
+  app.post("/api/collectors/run", async (req, res) => {
+    const out = await runCollectors({ trigger: "manual", useLLM: req.body?.useLLM !== false });
+    if (!out.ok) return res.status(409).json({ error: "A collection is already running" });
+    res.json(out);
   });
 
   // Source-tier calibration audit (D17). Groups all signals by tier + shows recent activity.
@@ -749,12 +846,25 @@ export async function registerRoutes(
       .sort((a, b) => b.count - a.count)
       .slice(0, 25);
 
+    const cfg = collectorConfig();
+    const lastRun = storage.lastCollectorRun();
+    const hasKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
     res.json({
       totalSignals: signals.length,
       tierAll,
       tier24h,
       tier7d,
       topDomains: domains,
+      schedule: {
+        // Scheduled runs need the LLM analyzer; keyword scoring is not trusted unattended.
+        enabled: cfg.intervalMinutes > 0 && hasKey,
+        intervalMinutes: cfg.intervalMinutes,
+        maxPerDay: cfg.maxPerDay,
+        analyzedToday: storage.analyzedSince(nowSec - DAY_SEC, SCHEDULED),
+        lastRun,
+        nextRunAt: cfg.intervalMinutes > 0 && hasKey ? (lastRun?.ranAt ?? nowSec) + cfg.intervalMinutes * 60 : null,
+        running: collecting,
+      },
     });
   });
 
@@ -1266,35 +1376,7 @@ export async function registerRoutes(
     const probsById: Record<string, number> = {};
     for (const p of probs) probsById[p.id] = p.probability;
     const nowSec = Math.floor(Date.now() / 1000);
-    const watchlist = storage.listWatchlist();
-    const triggered: any[] = [];
-    for (const w of watchlist) {
-      const cur = (probsById[w.scenarioId] ?? 0) * 100;
-      const crossed = w.op === "gt" ? cur >= w.thresholdPct : cur <= w.thresholdPct;
-      // lastTriggeredAt means "crossed since": set on the first evaluation that
-      // finds it crossed, cleared when it uncrosses so the alert re-arms. Before
-      // this nothing ever wrote it, so every alert looked like it had never fired.
-      const newlyTriggered = crossed && w.lastTriggeredAt == null;
-      if (newlyTriggered) {
-        storage.setWatchlistTriggered(w.id, nowSec);
-        w.lastTriggeredAt = nowSec;
-      } else if (!crossed && w.lastTriggeredAt != null) {
-        storage.setWatchlistTriggered(w.id, null);
-      }
-      if (crossed) {
-        triggered.push({
-          id: w.id,
-          scenarioId: w.scenarioId,
-          scenarioName: SCENARIOS.find(s => s.id === w.scenarioId)?.name || w.scenarioId,
-          op: w.op,
-          thresholdPct: w.thresholdPct,
-          currentPct: cur,
-          note: w.note ?? null,
-          lastTriggeredAt: w.lastTriggeredAt,
-          newlyTriggered,
-        });
-      }
-    }
+    const triggered = evaluateWatchlist(probsById, nowSec);
     res.json({ nowSec, probabilities: probs, triggered });
   });
 

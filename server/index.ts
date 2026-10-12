@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { createApp, log } from "./app";
 import { serveStatic } from "./static";
+import { startCollectorSchedule } from "./scheduler";
 
 export { log };
 
@@ -26,6 +27,7 @@ export { log };
     },
     () => {
       log(`serving on http://${host === "0.0.0.0" ? "localhost" : host}:${port}`);
+      startCollectorSchedule(app);
     },
   );
 })();

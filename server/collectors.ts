@@ -11,8 +11,15 @@ import { classifySource } from "./source-tiers";
 export interface RawHeadline {
   title: string;
   source: string;
+  /** Identity of the item and the link shown in the UI. */
   url: string;
   text: string;
+  /** Publisher's own URL when `url` is an aggregator link; used for source tiering. */
+  sourceUrl?: string;
+  /** Unix seconds the item was published, when the feed says. */
+  publishedAt?: number;
+  /** Coverage weight for ranking (default 1). See headline-select.ts. */
+  weight?: number;
 }
 
 async function fetchJsonWithTimeout(url: string, timeoutMs = 8000): Promise<any> {
@@ -53,6 +60,10 @@ export async function collectHackerNews(limit = 15): Promise<RawHeadline[]> {
       source: "Hacker News",
       url: it.url || `https://news.ycombinator.com/item?id=${it.id}`,
       text: `${it.title} (HN score ${it.score}, ${it.descendants ?? 0} comments)`,
+      publishedAt: typeof it.time === "number" ? it.time : undefined,
+      // A front-page story with several hundred points is as notable as one
+      // carried by two or three outlets.
+      weight: 1 + Math.floor((it.score ?? 0) / 300),
     }));
   } catch (e) {
     console.error("[collector:hn] failed:", (e as Error).message);
@@ -186,6 +197,8 @@ async function collectFredSeries(s: FredSeries): Promise<RawHeadline | null> {
     source: "FRED (St. Louis Fed)",
     // Series-and-month URL so the dedup layer treats each month as one story.
     url: `https://fred.stlouisfed.org/series/${s.id}#${latest.date}`,
+    // Three series, once a month: never crowd these out.
+    weight: 5,
     text:
       `${s.label} (FRED series ${s.id}) read ${latest.value} for ${latest.date}, ` +
       `${signed} year-over-year from ${yearAgo.value} in ${yearAgo.date}. ` +
@@ -207,9 +220,87 @@ export async function collectFRED(): Promise<RawHeadline[]> {
 }
 
 /**
+ * News: Google News RSS search, keyless. One query per area the drivers cover.
+ * Each item carries its publisher (used for source tiering) and publish time.
+ *
+ * `window` restricts results: { days } for a rolling window, or explicit
+ * { after, before } dates (YYYY-MM-DD) for backfilling a gap.
+ */
+export const NEWS_QUERIES = [
+  "AI chips export controls",
+  "AI data center power grid",
+  "AI regulation law",
+  "OpenAI OR Anthropic OR DeepMind new model",
+  "AI jobs layoffs automation",
+  "AI safety alignment research",
+  "AI drug discovery biotech",
+  "AI deepfake misinformation",
+];
+
+export type NewsWindow = { days: number } | { after: string; before: string };
+
+const decodeEntities = (s: string) =>
+  s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'");
+
+export function parseNewsRss(xml: string): RawHeadline[] {
+  const out: RawHeadline[] = [];
+  const itemRe = /<item>([\s\S]*?)<\/item>/g;
+  let m: RegExpExecArray | null;
+  while ((m = itemRe.exec(xml))) {
+    const block = m[1];
+    const rawTitle = /<title>([\s\S]*?)<\/title>/.exec(block)?.[1];
+    const link = /<link>([\s\S]*?)<\/link>/.exec(block)?.[1]?.trim();
+    const pub = /<pubDate>([\s\S]*?)<\/pubDate>/.exec(block)?.[1];
+    const src = /<source url="([^"]*)">([\s\S]*?)<\/source>/.exec(block);
+    if (!rawTitle || !link) continue;
+    const publisher = src ? decodeEntities(src[2]).trim() : "";
+    let title = decodeEntities(rawTitle).trim();
+    // Google appends " - Publisher" to every title.
+    if (publisher && title.endsWith(` - ${publisher}`)) title = title.slice(0, -(publisher.length + 3)).trim();
+    const publishedMs = pub ? Date.parse(pub) : NaN;
+    out.push({
+      title,
+      source: publisher || "news",
+      url: link,
+      sourceUrl: src?.[1],
+      text: publisher ? `${title} (${publisher})` : title,
+      publishedAt: Number.isFinite(publishedMs) ? Math.floor(publishedMs / 1000) : undefined,
+    });
+  }
+  return out;
+}
+
+export async function collectNews(window: NewsWindow = { days: 1 }, perQuery = 25): Promise<RawHeadline[]> {
+  const range = "days" in window ? `when:${window.days}d` : `after:${window.after} before:${window.before}`;
+  const settled = await Promise.allSettled(NEWS_QUERIES.map(async q => {
+    const url = `https://news.google.com/rss/search?q=${encodeURIComponent(`${q} ${range}`)}&hl=en-US&gl=US&ceid=US:en`;
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), 10000);
+    try {
+      const res = await fetch(url, { signal: controller.signal, headers: { "User-Agent": "trajectory-forecaster/1.0" } });
+      if (!res.ok) throw new Error(`${res.status}`);
+      return parseNewsRss(await res.text()).slice(0, perQuery);
+    } finally {
+      clearTimeout(t);
+    }
+  }));
+  const out: RawHeadline[] = [];
+  let failed = 0;
+  for (const r of settled) {
+    if (r.status === "fulfilled") out.push(...r.value);
+    else failed++;
+  }
+  // Every query failing is an outage worth reporting; a single miss is not.
+  if (failed === NEWS_QUERIES.length) throw new Error("all news queries failed");
+  return out;
+}
+
+/**
  * Aggregate collector — pull from all sources in parallel.
  */
-export async function collectAll(opts?: { hnLimit?: number; arxivLimit?: number }): Promise<{
+export async function collectAll(opts?: { hnLimit?: number; arxivLimit?: number; newsWindow?: NewsWindow; newsOnly?: boolean }): Promise<{
   headlines: RawHeadline[];
   byCollector: Record<string, number>;
   errors: Record<string, string>;
@@ -218,11 +309,14 @@ export async function collectAll(opts?: { hnLimit?: number; arxivLimit?: number 
   const results: RawHeadline[][] = [];
   const byCollector: Record<string, number> = {};
 
-  const runners: Array<[string, Promise<RawHeadline[]>]> = [
-    ["hn", collectHackerNews(opts?.hnLimit ?? 12)],
-    ["arxiv", collectArxiv(opts?.arxivLimit ?? 8)],
-    ["fred", collectFRED()],
-  ];
+  const runners: Array<[string, Promise<RawHeadline[]>]> = opts?.newsOnly
+    ? [["news", collectNews(opts.newsWindow)]]
+    : [
+        ["news", collectNews(opts?.newsWindow)],
+        ["hn", collectHackerNews(opts?.hnLimit ?? 12)],
+        ["arxiv", collectArxiv(opts?.arxivLimit ?? 8)],
+        ["fred", collectFRED()],
+      ];
 
   for (const [name, p] of runners) {
     try {
