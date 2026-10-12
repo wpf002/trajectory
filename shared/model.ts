@@ -245,7 +245,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Curiosity Renaissance',
     tagline: "Aravind's optimistic case",
     description: 'AI collapses cost of cognition. Humans specialize in question-asking, taste, judgment. Broad prosperity, cultural flourishing.',
-    color: '#4ade80',
+    color: '#12A37B',
     driverWeights: {
       capability_progress: 0.6,
       alignment_progress: 1.0,
@@ -270,7 +270,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Managed Transition',
     tagline: 'Muddle through',
     description: 'Bumpy but survivable. Winners and losers, real pain, but institutions adapt. Historical analog: internet transition of 1995-2015.',
-    color: '#60a5fa',
+    color: '#3D8FD1',
     driverWeights: {
       capability_progress: 0.5,
       alignment_progress: 0.6,
@@ -295,7 +295,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Oligarchic Capture',
     tagline: 'AI captured by few',
     description: 'AI works. It just works for the top 1%. Massive productivity gains flow to capital owners. Broad displacement without redistribution.',
-    color: '#f59e0b',
+    color: '#C0820E',
     driverWeights: {
       capability_progress: 0.6,
       labor_displacement: 0.9,
@@ -319,7 +319,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Cold AI War',
     tagline: 'Balkanized development',
     description: 'US, China, EU develop separate AI stacks. Coordination on safety collapses. Race dynamics dominate.',
-    color: '#a78bfa',
+    color: '#C678A4',
     driverWeights: {
       geopolitical_stability: -0.9,
       alignment_progress: -0.7, // race compromises safety
@@ -342,7 +342,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Great Filter Realized',
     tagline: "What Aravind and Joe were worried about",
     description: 'Misaligned superintelligence, engineered pandemic via AI-biotech, or automated warfare cascade. Existential-scale outcome.',
-    color: '#ef4444',
+    color: '#D9622B',
     driverWeights: {
       alignment_progress: -1.2,
       governance_response: -0.7,
@@ -365,7 +365,7 @@ export const SCENARIOS: Scenario[] = [
     name: 'Compute Wall',
     tagline: 'Scale hits ceiling',
     description: 'Scaling laws break down. Alignment gets easier because capabilities plateau. Slow, boring transformation instead of exponential.',
-    color: '#94a3b8',
+    color: '#8B9087',
     driverWeights: {
       compute_growth: -0.7,
       energy_capacity: -0.6,

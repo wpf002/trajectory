@@ -173,14 +173,14 @@ export default function Calibration() {
           </Button>
         )}
         <Button size="sm" variant="outline" className="h-8 text-xs gap-2" onClick={() => replay.mutate()} disabled={replay.isPending} data-testid="button-run-backtest">
-          <Play className="w-3 h-3" /> {replay.isPending ? "Running" : "Run replay"}
+          <Play className="w-3 h-3" /> {replay.isPending ? "Running" : "Run Replay"}
         </Button>
       </PageHeader>
 
       <Card className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border" data-testid="card-track-record">
-        <Fact label="Scenario accuracy" value="Not scoreable until 2028" />
+        <Fact label="Scenario Accuracy" value="Not scoreable until 2028" />
         <Fact
-          label="Release calls"
+          label="Release Calls"
           value={score ? `Off by ${score.meanAbsErrorDays.toFixed(0)} days on average` : "None resolved"}
           note={[
             score ? `${score.n} resolved` : null,
@@ -208,7 +208,7 @@ export default function Calibration() {
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <Card className="p-4">
           <div className="flex items-center gap-3 mb-3">
-            <h2 className="text-sm font-semibold">Forecast history</h2>
+            <h2 className="text-sm font-medium">Forecast History</h2>
             <span className="text-xs font-mono text-muted-foreground">{historyRows.length} snapshots</span>
             <button onClick={() => exportRows("forecast-history", historyRows, ["date"])} disabled={!historyRows.length}
               className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40" data-testid="button-export-history-csv">
@@ -220,7 +220,7 @@ export default function Calibration() {
 
         <Card className="p-4">
           <div className="flex items-center gap-3 mb-3">
-            <h2 className="text-sm font-semibold">Historical replay</h2>
+            <h2 className="text-sm font-medium">Historical Replay</h2>
             {latestReplay && <span className="text-xs font-mono text-muted-foreground">{latestReplay.eventCount} events, {month(latestReplay.startDate)} – {month(latestReplay.endDate)}</span>}
             <button onClick={() => exportRows("replay", replayRows, ["date", "event"])} disabled={!replayRows.length}
               className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40" data-testid="button-export-backtest-csv">
@@ -234,12 +234,12 @@ export default function Calibration() {
       </div>
 
       <Card className="p-4 overflow-x-auto" data-testid="card-model-releases">
-        <h2 className="text-sm font-semibold mb-3">Model releases</h2>
+        <h2 className="text-sm font-medium mb-3">Model Releases</h2>
         <table className="w-full min-w-[720px]">
           <thead>
             <tr className="border-b border-border">
               <th className={TH}>Model</th><th className={TH}>Lab</th><th className={TH}>Status</th><th className={TH}>Date</th>
-              <th className={TH}>80% range</th><th className={`${TH} text-right`}>Capability</th><th className={TH}>Benchmarks</th>
+              <th className={TH}>80% Range</th><th className={`${TH} text-right`}>Capability</th><th className={TH}>Benchmarks</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -279,7 +279,7 @@ export default function Calibration() {
       </Card>
 
       <Card className="p-4 overflow-x-auto" data-testid="card-crowd">
-        <h2 className="text-sm font-semibold mb-3">Crowd forecasts</h2>
+        <h2 className="text-sm font-medium mb-3">Crowd Forecasts</h2>
         {external.length === 0 ? <div className="p-4 text-sm text-muted-foreground">None loaded.</div> : (
           <table className="w-full min-w-[640px]">
             <thead>

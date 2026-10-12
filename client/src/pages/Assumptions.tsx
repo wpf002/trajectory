@@ -21,7 +21,7 @@ export default function Assumptions() {
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
         <Card className="p-4 xl:col-span-7 overflow-x-auto" data-testid="card-weights">
-          <h2 className="text-sm font-semibold mb-3">Driver weights</h2>
+          <h2 className="text-sm font-medium mb-3">Driver Weights</h2>
           <table className="w-full min-w-[560px] table-fixed text-xs font-mono">
             <colgroup>
               <col className="w-[26%]" />
@@ -90,11 +90,11 @@ export default function Assumptions() {
           <Card key={sc.id} className="p-4" data-testid={`card-scenario-${sc.id}`}>
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sc.color }} />
-              <h2 className="text-sm font-semibold flex-1 truncate">{sc.name}</h2>
+              <h2 className="text-sm font-medium flex-1 truncate">{sc.name}</h2>
               <span className="text-sm font-mono tabular-nums">{((probs[sc.id] ?? 0) * 100).toFixed(1)}%</span>
             </div>
             <p className="mt-2 text-xs text-muted-foreground">{sc.narrativeShort}</p>
-            <div className="mt-3 text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Watch for</div>
+            <div className="mt-3 text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Watch For</div>
             <ul className="mt-1 space-y-1 text-xs list-disc pl-4 marker:text-muted-foreground">
               {sc.earlyIndicators.map((ind, i) => <li key={i}>{ind}</li>)}
             </ul>

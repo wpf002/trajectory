@@ -81,7 +81,7 @@ export function DriverPanel() {
                           {influences.length > 0 && (
                             <div className="mt-2 pt-2 border-t border-border">
                               <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2">
-                                Most influences
+                                Most Influences
                               </div>
                               <div className="space-y-1">
                                 {influences.map(inf => {
@@ -124,7 +124,7 @@ export function DriverPanel() {
                           </div>
                           <div className="mt-2 pt-2 border-t border-border/50 grid grid-cols-2 gap-2">
                             <div>
-                              <div className="text-[11px] uppercase text-muted-foreground">Prior value</div>
+                              <div className="text-[11px] uppercase text-muted-foreground">Prior Value</div>
                               <div className="font-mono text-xs tabular-nums">{(driver.currentValue * 100).toFixed(0)}</div>
                             </div>
                             <div>

@@ -31,7 +31,7 @@ const NAV = [
 
 function TrajectoryLogo({ className = "w-7 h-7" }: { className?: string }) {
   return (
-    <svg viewBox="0 0 32 32" className={className} fill="none" stroke="currentColor" strokeWidth="1.5" aria-label="Trajectory logo">
+    <svg viewBox="0 0 32 32" className={className} fill="none" stroke="currentColor" strokeWidth="1.5" aria-label="Trajectory Logo">
       <path d="M4 26 L12 18 L18 22 L28 8" strokeLinecap="round" strokeLinejoin="round" />
       <circle cx="4" cy="26" r="1.5" fill="currentColor" />
       <circle cx="12" cy="18" r="1.5" fill="currentColor" />
@@ -52,13 +52,13 @@ export function MobileHeader({ onOpen, onShowShortcuts }: { onOpen: () => void; 
         onClick={onOpen}
         className="p-2 -ml-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
         data-testid="button-open-nav"
-        aria-label="Open navigation"
+        aria-label="Open Navigation"
       >
         <Menu className="w-5 h-5" />
       </button>
       <div className="flex items-center gap-2">
         <TrajectoryLogo className="w-5 h-5 text-sidebar-primary" />
-        <div className="text-xs font-semibold tracking-tight">TRAJECTORY</div>
+        <div className="font-display text-xl leading-none">Trajectory</div>
       </div>
       <div className="flex items-center gap-1">
         <ThemeToggle />
@@ -66,7 +66,7 @@ export function MobileHeader({ onOpen, onShowShortcuts }: { onOpen: () => void; 
           <button
             onClick={onShowShortcuts}
             className="p-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
-            aria-label="Keyboard shortcuts"
+            aria-label="Keyboard Shortcuts"
           >
             <Keyboard className="w-3.5 h-3.5" />
           </button>
@@ -143,10 +143,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
         <div className="p-4 border-b border-sidebar-border flex items-center justify-between">
           <div className="flex items-center gap-3">
             <TrajectoryLogo className="w-7 h-7 text-sidebar-primary" />
-            <div>
-              <div className="font-semibold text-sm tracking-tight">TRAJECTORY</div>
-              <div className="text-[11px] font-mono tracking-widest text-sidebar-foreground/60 -mt-1">FORECAST ENGINE</div>
-            </div>
+            <div className="font-display text-xl leading-none">Trajectory</div>
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle className="hidden lg:inline-flex" />
@@ -154,7 +151,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
               onClick={onClose}
               className="lg:hidden p-2 -mr-2 rounded-md hover:bg-sidebar-accent/50 transition-colors"
               data-testid="button-close-nav"
-              aria-label="Close navigation"
+              aria-label="Close Navigation"
             >
               <X className="w-5 h-5" />
             </button>

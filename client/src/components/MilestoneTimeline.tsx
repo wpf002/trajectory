@@ -30,7 +30,7 @@ export function MilestoneTimeline() {
   return (
     <Card className="p-4 border-border/50">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold">Milestones</h2>
+        <h2 className="text-sm font-medium">Milestones</h2>
         <div className="text-[11px] text-muted-foreground font-mono">
           median · 80% range
         </div>
@@ -106,7 +106,7 @@ export function MilestoneTimeline() {
                     </div>
                     <div>
                       <div className="text-[11px] uppercase text-muted-foreground">Median</div>
-                      <div className="font-mono tabular font-semibold" style={{ color }}>{m.medianYear.toFixed(0)}</div>
+                      <div className="font-mono tabular font-medium" style={{ color }}>{m.medianYear.toFixed(0)}</div>
                     </div>
                     <div>
                       <div className="text-[11px] uppercase text-muted-foreground">P90 (late)</div>
@@ -114,7 +114,7 @@ export function MilestoneTimeline() {
                     </div>
                   </div>
                   <div className="mt-2 pt-2 border-t border-border">
-                    <div className="text-[11px] uppercase text-muted-foreground">Depends on</div>
+                    <div className="text-[11px] uppercase text-muted-foreground">Depends On</div>
                     <div className="text-xs">{m.dependsOn.map(d => d.replace(/_/g, " ")).join(", ")}</div>
                   </div>
                 </HoverCardContent>

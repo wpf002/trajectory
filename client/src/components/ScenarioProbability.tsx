@@ -93,7 +93,7 @@ export function ScenarioProbability({ compareBaseline = false, baselineProbs }: 
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono tabular-nums text-xl font-semibold">
+                    <span className="font-mono tabular-nums text-xl font-medium">
                       {pct.toFixed(1)}%
                     </span>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
@@ -115,7 +115,7 @@ export function ScenarioProbability({ compareBaseline = false, baselineProbs }: 
                   </div>
                 )}
                 <div>
-                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">Watch for</div>
+                  <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">Watch For</div>
                   <ul className="space-y-1">
                     {scenario.earlyIndicators.map((ind, i) => (
                       <li key={i} className="text-xs flex items-start gap-2">
@@ -161,7 +161,7 @@ function ScenarioAttribution({
 
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">Pushing it</div>
+      <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">Drivers</div>
       <div className="space-y-2">
         {top.map(c => {
           const pct = (Math.abs(c.contribution) / maxAbs) * 100;
@@ -197,7 +197,7 @@ function ScenarioAttribution({
 }
 
 /**
- * Recent signals whose driverImpacts touch drivers with non-trivial weight on this scenario.
+ * Recent Signals whose driverImpacts touch drivers with non-trivial weight on this scenario.
  */
 function ScenarioTopSignals({ scenarioId }: { scenarioId: string }) {
   const scenario = SCENARIOS.find(s => s.id === scenarioId)!;
@@ -246,7 +246,7 @@ function ScenarioTopSignals({ scenarioId }: { scenarioId: string }) {
   return (
     <div>
       <div className="text-[11px] uppercase tracking-widest text-muted-foreground mb-2 font-mono">
-        Recent signals
+        Recent Signals
       </div>
       {ranked.length === 0 ? (
         <div className="text-xs text-muted-foreground py-1">
@@ -296,8 +296,8 @@ function ScenarioTopSignals({ scenarioId }: { scenarioId: string }) {
                   <button
                     onClick={e => { e.stopPropagation(); pinMutation.mutate({ id: signal.id, pinned: !signal.pinned }); }}
                     className={`transition-colors ${signal.pinned ? "text-accent" : "text-muted-foreground hover:text-foreground"}`}
-                    title={signal.pinned ? "Unpin" : "Pin to top"}
-                    aria-label={signal.pinned ? "Unpin signal" : "Pin signal"}
+                    title={signal.pinned ? "Unpin" : "Pin"}
+                    aria-label={signal.pinned ? "Unpin Signal" : "Pin Signal"}
                     data-testid={`pin-signal-${scenarioId}-${signal.id}`}
                   >
                     {signal.pinned ? <PinOff className="w-3 h-3" /> : <Pin className="w-3 h-3" />}

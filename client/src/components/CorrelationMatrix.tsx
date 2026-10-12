@@ -10,7 +10,7 @@ export const heat = (v: number, max = 1) =>
 export function CorrelationMatrix() {
   return (
     <Card className="p-4 h-full">
-      <h2 className="text-sm font-semibold mb-3">Driver correlations</h2>
+      <h2 className="text-sm font-medium mb-3">Driver Correlations</h2>
       <table className="w-full table-fixed text-[11px] font-mono">
         <colgroup>
           <col className="w-[38%]" />

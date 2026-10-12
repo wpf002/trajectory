@@ -41,9 +41,6 @@ export function PresetPreviewButton({ preset, onApply, currentValues }: PresetPr
       <HoverCardContent side="right" className="w-72 text-xs">
         <div className="font-medium mb-1">{preset.name}</div>
         <div className="text-muted-foreground mb-3 text-[11px] leading-relaxed">{preset.description}</div>
-        <div className="text-[11px] uppercase tracking-widest text-muted-foreground font-mono mb-2">
-          Predicted scenario probabilities
-        </div>
         <div className="space-y-1">
           {sorted.map(p => {
             const scenario = SCENARIOS.find(s => s.id === p.id)!;
@@ -56,7 +53,7 @@ export function PresetPreviewButton({ preset, onApply, currentValues }: PresetPr
                   style={{ backgroundColor: scenario.color }}
                 />
                 <span className="flex-1 truncate">{scenario.name}</span>
-                <span className="font-mono tabular-nums" style={{ color: scenario.color }}>
+                <span className="font-mono tabular-nums">
                   {(p.probability * 100).toFixed(1)}%
                 </span>
                 {Math.abs(delta) >= 0.5 && (
@@ -72,9 +69,6 @@ export function PresetPreviewButton({ preset, onApply, currentValues }: PresetPr
               </div>
             );
           })}
-        </div>
-        <div className="text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border">
-          Click to apply
         </div>
       </HoverCardContent>
     </HoverCard>

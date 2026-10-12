@@ -73,7 +73,7 @@ function Alerts() {
   return (
     <Card className="p-4" data-testid="card-alerts">
       <div className="flex items-baseline gap-3 mb-3">
-        <h2 className="text-sm font-semibold">Alerts</h2>
+        <h2 className="text-sm font-medium">Alerts</h2>
         {crossed.size > 0 && <span className="text-xs font-mono text-accent">{crossed.size} crossed</span>}
       </div>
       <form className="flex flex-wrap gap-2" onSubmit={e => { e.preventDefault(); add.mutate(); }}>
@@ -117,12 +117,12 @@ function Alerts() {
 
 /** Sensitivity of a holding to each scenario, -1 (wiped out) to +1 (amplified). */
 const PRESETS: Array<{ label: string; sensitivities: Record<string, number> }> = [
-  { label: "NVDA / semiconductors", sensitivities: { curiosity_renaissance: 0.8, managed_transition: 0.6, oligarchic_capture: 0.5, fragmentation: -0.4, great_filter: -0.9, stagnation: -0.6 } },
-  { label: "SPY / broad US equities", sensitivities: { curiosity_renaissance: 0.6, managed_transition: 0.5, oligarchic_capture: 0.1, fragmentation: -0.3, great_filter: -0.8, stagnation: -0.2 } },
-  { label: "BTC / crypto", sensitivities: { curiosity_renaissance: 0.2, managed_transition: -0.2, oligarchic_capture: 0.1, fragmentation: 0.7, great_filter: -0.4, stagnation: 0.0 } },
-  { label: "Cash / short T-bills", sensitivities: { curiosity_renaissance: -0.4, managed_transition: -0.1, oligarchic_capture: -0.2, fragmentation: 0.3, great_filter: 0.5, stagnation: 0.4 } },
-  { label: "Home / residential real estate", sensitivities: { curiosity_renaissance: 0.3, managed_transition: 0.2, oligarchic_capture: -0.1, fragmentation: 0.0, great_filter: -0.5, stagnation: 0.1 } },
-  { label: "SWE career capital", sensitivities: { curiosity_renaissance: 0.7, managed_transition: 0.4, oligarchic_capture: -0.3, fragmentation: 0.1, great_filter: -0.6, stagnation: -0.2 } },
+  { label: "NVDA / Semiconductors", sensitivities: { curiosity_renaissance: 0.8, managed_transition: 0.6, oligarchic_capture: 0.5, fragmentation: -0.4, great_filter: -0.9, stagnation: -0.6 } },
+  { label: "SPY / Broad US Equities", sensitivities: { curiosity_renaissance: 0.6, managed_transition: 0.5, oligarchic_capture: 0.1, fragmentation: -0.3, great_filter: -0.8, stagnation: -0.2 } },
+  { label: "BTC / Crypto", sensitivities: { curiosity_renaissance: 0.2, managed_transition: -0.2, oligarchic_capture: 0.1, fragmentation: 0.7, great_filter: -0.4, stagnation: 0.0 } },
+  { label: "Cash / Short T-Bills", sensitivities: { curiosity_renaissance: -0.4, managed_transition: -0.1, oligarchic_capture: -0.2, fragmentation: 0.3, great_filter: 0.5, stagnation: 0.4 } },
+  { label: "Home / Residential Real Estate", sensitivities: { curiosity_renaissance: 0.3, managed_transition: 0.2, oligarchic_capture: -0.1, fragmentation: 0.0, great_filter: -0.5, stagnation: 0.1 } },
+  { label: "SWE Career Capital", sensitivities: { curiosity_renaissance: 0.7, managed_transition: 0.4, oligarchic_capture: -0.3, fragmentation: 0.1, great_filter: -0.6, stagnation: -0.2 } },
 ];
 
 function Holdings() {
@@ -164,7 +164,7 @@ function Holdings() {
   return (
     <Card className="p-4" data-testid="card-holdings">
       <div className="flex items-baseline gap-3 mb-3">
-        <h2 className="text-sm font-semibold">Holdings</h2>
+        <h2 className="text-sm font-medium">Holdings</h2>
         {rows.length > 0 && (
           <span className="text-xs font-mono text-muted-foreground">
             {totalWeight.toFixed(0)}% allocated · expected <span className={tone(expected)}>{signed(expected)}</span>
@@ -244,7 +244,7 @@ function Decisions() {
   return (
     <Card className="p-4 h-full" data-testid="card-decisions">
       <div className="flex items-baseline gap-3 mb-3">
-        <h2 className="text-sm font-semibold">Decisions</h2>
+        <h2 className="text-sm font-medium">Decisions</h2>
         {decisions.length > 0 && (
           <span className="text-xs font-mono text-muted-foreground">
             {scored.length} of {decisions.length} reviewed{avg !== null && <> · average <span className={tone(avg)}>{signed(avg)}</span></>}
@@ -309,7 +309,7 @@ function DecisionRow({ decision, onDelete, onReview }: {
         {decision.outcomeScore != null
           ? <span className={`text-xs font-mono tabular-nums ${tone(decision.outcomeScore)}`}>{signed(decision.outcomeScore)}</span>
           : <button onClick={() => setOpen(v => !v)} className={`text-xs ${due ? "text-accent" : "text-muted-foreground hover:text-foreground"}`} data-testid={`button-open-review-${decision.id}`}>
-              {due ? "Review due" : "Review"}
+              {due ? "Review Due" : "Review"}
             </button>}
         <DeleteButton onClick={onDelete} testId={`button-delete-decision-${decision.id}`} />
       </div>
@@ -324,7 +324,7 @@ function DecisionRow({ decision, onDelete, onReview }: {
         <div className="mt-2 flex gap-2">
           <Input value={outcome} onChange={e => setOutcome(e.target.value)} placeholder="What happened" className="flex-1" data-testid={`input-outcome-${decision.id}`} />
           <Input type="number" min={-1} max={1} step={0.1} value={score} onChange={e => setScore(parseFloat(e.target.value) || 0)} className="w-20" aria-label="Score, -1 to 1" title="-1 bad call, +1 good call" data-testid={`input-score-${decision.id}`} />
-          <Button size="icon" onClick={() => { onReview(outcome, score); setOpen(false); }} aria-label="Save review" data-testid={`button-save-review-${decision.id}`}>
+          <Button size="icon" onClick={() => { onReview(outcome, score); setOpen(false); }} aria-label="Save Review" data-testid={`button-save-review-${decision.id}`}>
             <Check className="w-4 h-4" />
           </Button>
         </div>

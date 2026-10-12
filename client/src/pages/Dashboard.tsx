@@ -145,12 +145,12 @@ export default function Dashboard() {
       <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between pb-4 border-b border-border">
         <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground" data-testid="page-title">
-            {tiedCount > 1 ? `Top ${tiedCount} tied` : whatIfActive ? "Most likely (what-if)" : "Most likely"}
+            {tiedCount > 1 ? `Top ${tiedCount} Tied` : whatIfActive ? "Most Likely (What-If)" : "Most Likely"}
           </div>
           <div className="mt-2 flex items-center gap-3 flex-wrap">
             <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: topScenarioObj.color }} aria-hidden />
-            <h1 className="text-2xl font-semibold tracking-tight">{topScenarioObj.name}</h1>
-            <span className="text-2xl font-mono tabular-nums font-semibold" data-testid="text-top-probability">
+            <h1 className="font-display text-[32px] leading-none">{topScenarioObj.name}</h1>
+            <span className="font-display text-[32px] leading-none text-muted-foreground" data-testid="text-top-probability">
               {(topScenario.probability * 100).toFixed(1)}%
             </span>
             {topDrift && Math.abs(topDrift.deltaDay) >= 0.3 && (
@@ -190,13 +190,13 @@ export default function Dashboard() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="text-xs">
                 <DropdownMenuItem onClick={handleExportMarkdown} data-testid="button-export-md">
-                  <FileText className="w-3 h-3 mr-2" /> Download markdown
+                  <FileText className="w-3 h-3 mr-2" /> Download Markdown
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleExportJson} data-testid="button-export-state">
                   <Download className="w-3 h-3 mr-2" /> Download JSON
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handlePrintPdf} data-testid="button-export-pdf">
-                  <Printer className="w-3 h-3 mr-2" /> Print / save as PDF
+                  <Printer className="w-3 h-3 mr-2" /> Print or Save PDF
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -212,7 +212,7 @@ export default function Dashboard() {
         <Card className="p-4 col-span-12 xl:col-span-4 order-2 xl:order-1">
           <div className="flex items-center gap-2 mb-3">
             <GitBranch className="w-3 h-3 text-accent" />
-            <h2 className="text-sm font-semibold">Drivers</h2>
+            <h2 className="text-sm font-medium">Drivers</h2>
           </div>
           <DriverPanel />
         </Card>
@@ -221,7 +221,7 @@ export default function Dashboard() {
           <Card className="p-4 col-span-12 order-1">
             <div className="flex items-center gap-2 mb-3">
               <Radio className="w-3 h-3 text-accent" />
-              <h2 className="text-sm font-semibold">Scenarios</h2>
+              <h2 className="text-sm font-medium">Scenarios</h2>
               {whatIfActive && (
                 <Button
                   variant={compareBaseline ? "default" : "ghost"}
@@ -231,7 +231,7 @@ export default function Dashboard() {
                   data-testid="button-compare-baseline"
                 >
                   <GitCompare className="w-3 h-3" />
-                  {compareBaseline ? "Hide news" : "Compare to news"}
+                  {compareBaseline ? "Hide News" : "Compare to News"}
                 </Button>
               )}
             </div>

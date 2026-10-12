@@ -42,17 +42,17 @@ export function SensitivityPanel() {
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-1">
-        <h2 className="text-sm font-semibold">Biggest levers</h2>
+        <h2 className="text-sm font-medium">Biggest Levers</h2>
         <HoverCard openDelay={100}>
           <HoverCardTrigger asChild>
-            <button className="ml-auto text-muted-foreground hover:text-foreground" aria-label="What is leverage?">
+            <button className="ml-auto text-muted-foreground hover:text-foreground" aria-label="About Sensitivity">
               <HelpCircle className="w-3 h-3" />
             </button>
           </HoverCardTrigger>
           <HoverCardContent side="left" className="w-72 text-xs">
-            <div className="font-medium mb-1">Sensitivity analysis</div>
+            <div className="font-medium mb-1">Sensitivity</div>
             <div className="text-muted-foreground">
-              How much the forecast moves when each driver shifts 10 points. Green bars favor the top scenario.
+              Forecast change per 10-point move. Green favors the leader.
             </div>
           </HoverCardContent>
         </HoverCard>

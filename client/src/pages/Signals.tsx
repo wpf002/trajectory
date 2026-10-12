@@ -263,7 +263,7 @@ export default function Signals() {
         </div>
         <Button size="sm" variant="outline" className="h-8 text-xs gap-2" onClick={() => collect.mutate()} disabled={collect.isPending} data-testid="button-run-collectors">
           {collect.isPending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Play className="w-3 h-3" />}
-          Check now
+          Check Now
         </Button>
       </PageHeader>
 
@@ -277,7 +277,7 @@ export default function Signals() {
               <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="Headline" className="md:flex-1" data-testid="input-signal-title" />
               <Input value={source} onChange={e => setSource(e.target.value)} placeholder="Source URL or name" className="md:w-64" data-testid="input-signal-source" />
               <Button type="button" variant="ghost" onClick={() => setShowDetails(v => !v)} data-testid="button-toggle-details">
-                {showDetails ? "Hide details" : "Details"}
+                {showDetails ? "Hide Details" : "Details"}
               </Button>
               <Button type="submit" disabled={(!title.trim() && !text.trim()) || analyze.isPending} data-testid="button-analyze">
                 {analyze.isPending ? "Analyzing" : "Analyze"}
@@ -296,7 +296,7 @@ export default function Signals() {
                   <span><Impacts impacts={analysis.weightedImpacts ?? analysis.driverImpacts} /></span>
                   <span className="ml-auto flex gap-2">
                     <Button size="sm" variant="ghost" className="h-8" onClick={() => setAnalysis(null)}>Discard</Button>
-                    <Button size="sm" className="h-8" onClick={() => add.mutate()} disabled={add.isPending} data-testid="button-apply-signal">Add signal</Button>
+                    <Button size="sm" className="h-8" onClick={() => add.mutate()} disabled={add.isPending} data-testid="button-apply-signal">Add Signal</Button>
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground max-w-[100ch]" data-testid="text-analysis-reasoning">{analysis.reasoning}</p>
@@ -309,14 +309,14 @@ export default function Signals() {
               <Select value={filterDriver} onValueChange={v => { setFilterDriver(v); setShown(PAGE_SIZE); }}>
                 <SelectTrigger className="h-8 text-xs w-auto min-w-[140px]" data-testid="filter-driver"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All drivers</SelectItem>
+                  <SelectItem value="all">All Drivers</SelectItem>
                   {DRIVERS.map(d => <SelectItem key={d.id} value={d.id}>{d.label}</SelectItem>)}
                 </SelectContent>
               </Select>
               <Select value={filterDirection} onValueChange={v => { setFilterDirection(v); setShown(PAGE_SIZE); }}>
                 <SelectTrigger className="h-8 text-xs w-auto min-w-[130px]" data-testid="filter-direction"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All directions</SelectItem>
+                  <SelectItem value="all">All Directions</SelectItem>
                   <SelectItem value="accelerating">Accelerating</SelectItem>
                   <SelectItem value="decelerating">Decelerating</SelectItem>
                   <SelectItem value="neutral">Neutral</SelectItem>
@@ -325,7 +325,7 @@ export default function Signals() {
               <Select value={filterTier} onValueChange={v => { setFilterTier(v); setShown(PAGE_SIZE); }}>
                 <SelectTrigger className="h-8 text-xs w-auto min-w-[110px]" data-testid="filter-tier"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All tiers</SelectItem>
+                  <SelectItem value="all">All Tiers</SelectItem>
                   {TIERS.map(t => <SelectItem key={t} value={t}>{t[0].toUpperCase() + t.slice(1)}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -349,7 +349,7 @@ export default function Signals() {
             </div>
 
             <div className={`hidden md:grid ${ROW_COLS} gap-3 px-2 pb-2 text-[11px] uppercase tracking-widest font-mono text-muted-foreground border-b border-border`}>
-              <span /><span>Signal</span><span>Source</span><span>Date</span><span>Drivers moved</span><span className="text-right">Conf</span><span />
+              <span /><span>Signal</span><span>Source</span><span>Date</span><span>Drivers Moved</span><span className="text-right">Conf</span><span />
             </div>
 
             {isLoading ? (
@@ -412,7 +412,7 @@ export default function Signals() {
             )}
             {signals.length > shown && (
               <Button variant="ghost" size="sm" className="w-full mt-2 text-xs" onClick={() => setShown(n => n + PAGE_SIZE)}>
-                Show {Math.min(PAGE_SIZE, signals.length - shown)} more
+                Show {Math.min(PAGE_SIZE, signals.length - shown)} More
               </Button>
             )}
           </Card>
@@ -432,7 +432,7 @@ export default function Signals() {
             </div>
           )}
           <div className="grid grid-cols-[minmax(0,1fr)_90px_70px_70px_80px] gap-3 px-2 pb-2 text-[11px] uppercase tracking-widest font-mono text-muted-foreground border-b border-border">
-            <span>Domain</span><span>Tier</span><span className="text-right">Signals</span><span className="text-right">Avg size</span><span className="text-right">Latest</span>
+            <span>Domain</span><span>Tier</span><span className="text-right">Signals</span><span className="text-right">Avg Size</span><span className="text-right">Latest</span>
           </div>
           <div className="divide-y divide-border/50">
             {(status.data?.topDomains ?? []).map(d => (
@@ -528,7 +528,7 @@ function SignalDialog({ signal, onClose }: { signal: Signal | null; onClose: () 
             )}
           </div>
           <div data-testid="section-counterfactual">
-            <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground mb-2">Without it → now</div>
+            <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground mb-2">Without It → Now</div>
             {rows.length === 0 ? <div className="text-xs text-muted-foreground">Not in the forecast</div> : (
               <div className="space-y-2">
                 {rows.map(r => {

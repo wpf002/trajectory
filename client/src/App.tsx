@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider, useTheme } from "@/lib/theme";
 import { Sidebar, MobileHeader } from "@/components/Sidebar";
-import { ShortcutHelp } from "@/components/OnboardingHint";
+import { ShortcutHelp } from "@/components/ShortcutHelp";
 import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { useTrajectoryStore } from "@/lib/store";
 import { DRIVERS, DriverId } from "../../shared/model";

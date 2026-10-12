@@ -131,7 +131,7 @@ export function ProvenanceGraph() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            Signal → driver → scenario
+            Signal → Driver → Scenario
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
             <Button
@@ -166,7 +166,7 @@ export function ProvenanceGraph() {
       <CardContent>
         {signalNodes.length === 0 ? (
           <div className="text-sm text-muted-foreground py-8 text-center" data-testid="text-provenance-empty">
-            No recent signals.
+            No signals yet.
           </div>
         ) : (
           <div className="w-full overflow-x-auto">
