@@ -5,8 +5,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DRIVERS, SCENARIOS, type Scenario } from "@shared/model";
 import type { Signal } from "@shared/schema";
-import { GitBranch } from "lucide-react";
-import { useTrajectoryStore } from "@/lib/store";
 
 type Node = { id: string; label: string; y: number; sub?: string; color?: string };
 type Edge = { from: string; to: string; weight: number; color?: string };
@@ -28,17 +26,13 @@ function parseImpacts(raw?: string | null): Record<string, number> {
 export function ProvenanceGraph() {
   const { data: signals = [] } = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
   const [focusScenario, setFocusScenario] = useState<string | null>(null);
-  const halfLifeDays = useTrajectoryStore((s) => s.decayHalfLifeDays);
-  const setHalfLifeDays = useTrajectoryStore((s) => s.setDecayHalfLifeDays);
 
   const { signalNodes, driverNodes, scenarioNodes, edges, height } = useMemo(() => {
-    // Take up to 12 most recent signals with parseable driverImpacts
-    const now = Math.floor(Date.now() / 1000);
+    // The 12 newest signals that moved a driver. "Newest" is relative to the
+    // data, not the wall clock: a 14-day wall-clock window showed nothing
+    // whenever the collectors hadn't run for two weeks.
     const recent = signals
-      .filter((s) => {
-        const imp = parseImpacts(s.driverImpacts);
-        return Object.keys(imp).length > 0 && now - s.timestamp < 60 * 60 * 24 * 14;
-      })
+      .filter((s) => s.sourceTier !== "rejected" && Object.keys(parseImpacts(s.driverImpacts)).length > 0)
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 12);
 
@@ -66,20 +60,22 @@ export function ProvenanceGraph() {
       color: sc.color,
     }));
 
-    // Edges: signal → driver (when signal has impact on driver), with time-decay applied per B7
+    // Edges: signal → driver, thickness relative to the largest impact shown.
+    // Stored impacts are confidence- and tier-weighted (typically under 0.02),
+    // so a fixed cutoff written for raw impacts hid every edge.
     const sdEdges: Edge[] = [];
-    const halfLifeSec = halfLifeDays * 86400;
+    const maxImpact = Math.max(
+      ...recent.flatMap((s) => Object.values(parseImpacts(s.driverImpacts)).map((d) => Math.abs(d))),
+      1e-6,
+    );
     recent.forEach((s) => {
-      const imp = parseImpacts(s.driverImpacts);
-      const ageSec = Math.max(0, now - s.timestamp);
-      const decay = Math.pow(0.5, ageSec / Math.max(halfLifeSec, 1));
-      Object.entries(imp).forEach(([driverId, delta]) => {
-        const decayed = delta * decay;
-        if (Math.abs(decayed) < 0.02) return;
+      Object.entries(parseImpacts(s.driverImpacts)).forEach(([driverId, delta]) => {
+        const rel = Math.abs(delta) / maxImpact;
+        if (rel < 0.1) return;
         sdEdges.push({
           from: `s:${s.id}`,
           to: `d:${driverId}`,
-          weight: Math.min(Math.abs(decayed), 1),
+          weight: rel,
           color: delta > 0 ? "hsl(var(--positive))" : "hsl(var(--negative))",
         });
       });
@@ -109,7 +105,7 @@ export function ProvenanceGraph() {
       ) + 20;
 
     return { signalNodes, driverNodes, scenarioNodes, edges, height };
-  }, [signals, halfLifeDays]);
+  }, [signals]);
 
   const allNodes = [...signalNodes, ...driverNodes, ...scenarioNodes];
   const nodeById = new Map(allNodes.map((n) => [n.id, n]));
@@ -135,23 +131,9 @@ export function ProvenanceGraph() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="text-sm flex items-center gap-2">
-            <GitBranch className="h-4 w-4" />
-            Signal → Driver → Scenario provenance
+            Signal → driver → scenario
           </CardTitle>
           <div className="flex items-center gap-2 flex-wrap">
-            <label className="flex items-center gap-1 text-xs text-muted-foreground" data-testid="control-halflife">
-              Half-life
-              <input
-                type="range"
-                min={3}
-                max={120}
-                value={halfLifeDays}
-                onChange={(e) => setHalfLifeDays(Number(e.target.value))}
-                className="w-20"
-                aria-label="Signal impact half-life in days"
-              />
-              <span className="font-mono tabular-nums w-6 text-right">{halfLifeDays}d</span>
-            </label>
             <Button
               size="sm"
               variant={focusScenario === null ? "default" : "outline"}
@@ -180,10 +162,6 @@ export function ProvenanceGraph() {
             ))}
           </div>
         </div>
-        <p className="text-xs text-muted-foreground mt-1">
-          How today&apos;s signals flow through the 12 drivers to shape the six scenarios.
-          Green edges push driver up, red push it down. Filter by scenario to isolate its causal chain.
-        </p>
       </CardHeader>
       <CardContent>
         {signalNodes.length === 0 ? (
@@ -193,8 +171,8 @@ export function ProvenanceGraph() {
         ) : (
           <div className="w-full overflow-x-auto">
             <svg
-              width={COL_X.scenario + NODE_W + 20}
-              height={height}
+              viewBox={`0 0 ${COL_X.scenario + NODE_W + 20} ${height}`}
+              width="100%"
               className="text-foreground"
               data-testid="svg-provenance"
             >
@@ -318,13 +296,12 @@ export function ProvenanceGraph() {
         <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
           <div className="flex items-center gap-1">
             <div className="w-3 h-0.5" style={{ backgroundColor: "hsl(var(--positive))" }} />
-            <span>Signal pushes driver up</span>
+            <span>Up</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-3 h-0.5" style={{ backgroundColor: "hsl(var(--negative))" }} />
-            <span>Signal pushes driver down</span>
+            <span>Down</span>
           </div>
-          <div>Edge thickness = magnitude of impact/weight</div>
         </div>
       </CardContent>
     </Card>

@@ -218,3 +218,17 @@ test("a decision snapshots the current news forecast and takes a bounded review 
   const bad = await api("PATCH", `/api/decisions/${d.id}`, { outcomeScore: 5 });
   assert.equal(bad.status, 400);
 });
+
+test("analyze returns the weighted impacts a client should store", async () => {
+  const { status, data } = await api("POST", "/api/analyze", {
+    title: "New export controls on advanced chips",
+    text: "The government announced new export controls restricting advanced chip sales.",
+    source: "https://www.reuters.com/technology/x",
+    useLLM: false,
+  });
+  assert.equal(status, 200);
+  const keys = Object.keys(data.driverImpacts);
+  assert.ok(keys.length > 0, "fixture should match at least one keyword rule");
+  const w = data.confidence * tierMultiplier(data.sourceTier);
+  for (const k of keys) assert.ok(Math.abs(data.weightedImpacts[k] - data.driverImpacts[k] * w) < 1e-12);
+});

@@ -74,28 +74,13 @@ export function useKeyboardShortcuts({ onFocusSignalInput, onOpenHelp, onResetDr
           setLocation("/signals");
           break;
         case "3":
-          setLocation("/external");
-          break;
-        case "4":
           setLocation("/calibration");
           break;
-        case "5":
-          setLocation("/model-releases");
-          break;
-        case "6":
+        case "4":
           setLocation("/assumptions");
           break;
-        case "7":
-          setLocation("/watchlist");
-          break;
-        case "8":
-          setLocation("/portfolio");
-          break;
-        case "9":
-          setLocation("/decisions");
-          break;
-        case "0":
-          setLocation("/sources");
+        case "5":
+          setLocation("/plan");
           break;
         case "?":
           onOpenHelp?.();

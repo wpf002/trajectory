@@ -1,20 +1,14 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
-  Activity,
   Radio,
-  Globe2,
   LineChart,
   GaugeCircle,
   Menu,
   X,
   Keyboard,
-  Cpu,
   ClipboardCheck,
-  Bell,
   Wallet,
-  BookOpen,
-  Database,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { WatchlistItem } from "@shared/schema";
@@ -28,16 +22,11 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
 
 const NAV = [
-  { href: "/", label: "Dashboard", icon: GaugeCircle, shortcut: "1" },
-  { href: "/signals", label: "Signals", icon: Radio, shortcut: "2" },
-  { href: "/external", label: "External Forecasts", icon: Globe2, shortcut: "3" },
-  { href: "/calibration", label: "Calibration", icon: LineChart, shortcut: "4" },
-  { href: "/model-releases", label: "Model Releases", icon: Cpu, shortcut: "5" },
-  { href: "/assumptions", label: "Assumptions", icon: ClipboardCheck, shortcut: "6" },
-  { href: "/watchlist", label: "Watchlist", icon: Bell, shortcut: "7" },
-  { href: "/portfolio", label: "Portfolio", icon: Wallet, shortcut: "8" },
-  { href: "/decisions", label: "Decisions", icon: BookOpen, shortcut: "9" },
-  { href: "/sources", label: "Sources", icon: Database, shortcut: "0" },
+  { href: "/", label: "Dashboard", icon: GaugeCircle },
+  { href: "/signals", label: "Signals", icon: Radio },
+  { href: "/calibration", label: "Calibration", icon: LineChart },
+  { href: "/assumptions", label: "Assumptions", icon: ClipboardCheck },
+  { href: "/plan", label: "Plan", icon: Wallet },
 ];
 
 function TrajectoryLogo({ className = "w-7 h-7" }: { className?: string }) {
@@ -189,7 +178,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
                 >
                   <Icon className="w-4 h-4" />
                   <span className="flex-1">{item.label}</span>
-                  {item.href === "/watchlist" && crossedCount > 0 && (
+                  {item.href === "/plan" && crossedCount > 0 && (
                     <span className="text-[11px] font-mono tabular-nums px-2 rounded-full bg-accent text-accent-foreground" title={`${crossedCount} alert${crossedCount === 1 ? "" : "s"} crossed`}>
                       {crossedCount}
                     </span>
@@ -255,12 +244,6 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
         </div>
 
-        <div className="mt-auto p-3 border-t border-sidebar-border">
-          <div className="text-[11px] font-mono text-sidebar-foreground/40 flex items-center gap-1">
-            <Activity className="w-2.5 h-2.5" />
-            <span>v1.1 · {new Date().getFullYear()}</span>
-          </div>
-        </div>
       </aside>
 
     </>

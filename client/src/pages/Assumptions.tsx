@@ -1,287 +1,116 @@
-import { useMemo, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Separator } from "@/components/ui/separator";
-import { SCENARIOS, DRIVERS, type DriverId, HISTORICAL_ANALOGS, coherenceFindings } from "@shared/model";
+import { AlertTriangle } from "lucide-react";
+import { DRIVERS, SCENARIOS, HISTORICAL_ANALOGS, coherenceFindings, computeScenarioProbabilities } from "@shared/model";
 import { useTrajectoryStore } from "@/lib/store";
-import { AlertTriangle, Check, ChevronDown, ChevronRight, History, MessageSquareWarning, RotateCcw } from "lucide-react";
-import { CorrelationMatrix } from "@/components/CorrelationMatrix";
+import { Card } from "@/components/ui/card";
+import { CorrelationMatrix, heat } from "@/components/CorrelationMatrix";
+import { PageHeader, PAGE_CLASS } from "@/components/PageHeader";
 
-/**
- * A "baked-in assumption" is a modeling choice the user can inspect and disagree with.
- * For each scenario we expose:
- *  - the narrative (worldview)
- *  - every non-zero driverWeight (this driver → this scenario relationship)
- *  - each earlyIndicator (implicit prediction that "this thing will happen if this scenario is winning")
- */
-
-type AssumptionRow = {
-  key: string;
-  kind: "narrative" | "weight" | "indicator";
-  label: string;
-  detail: string;
-  weight?: number;
-};
+const weightOf = (scenarioId: string, driverId: string) =>
+  (SCENARIOS.find(s => s.id === scenarioId)!.driverWeights as Record<string, number | undefined>)[driverId] ?? 0;
 
 export default function Assumptions() {
-  const disagreements = useTrajectoryStore((s) => s.disagreements);
-  const toggleDisagreement = useTrajectoryStore((s) => s.toggleDisagreement);
-  const setDisagreementNote = useTrajectoryStore((s) => s.setDisagreementNote);
-  const clearDisagreements = useTrajectoryStore((s) => s.clearDisagreements);
-  const [expanded, setExpanded] = useState<string | null>(SCENARIOS[0]?.id ?? null);
-
-  const total = SCENARIOS.reduce((acc, sc) => {
-    // narrative (1) + weights (n) + indicators (m)
-    return acc + 1 + Object.keys(sc.driverWeights).length + sc.earlyIndicators.length;
-  }, 0);
-  const disagreeCount = Object.keys(disagreements).length;
-
-  const rowsFor = useMemo(() => {
-    const m: Record<string, AssumptionRow[]> = {};
-    SCENARIOS.forEach((sc) => {
-      const rows: AssumptionRow[] = [];
-      rows.push({
-        key: "narrative",
-        kind: "narrative",
-        label: "Worldview",
-        detail: sc.narrativeLong,
-      });
-      Object.entries(sc.driverWeights).forEach(([driverId, weight]) => {
-        const drv = DRIVERS.find((d) => d.id === (driverId as DriverId));
-        if (!drv || !weight) return;
-        const dir = weight > 0 ? "helps" : "hurts";
-        rows.push({
-          key: `weight:${driverId}`,
-          kind: "weight",
-          label: `${drv.label} ${dir} this scenario`,
-          detail: drv.description,
-          weight,
-        });
-      });
-      sc.earlyIndicators.forEach((ind, i) => {
-        rows.push({
-          key: `indicator:${i}`,
-          kind: "indicator",
-          label: "If this scenario is winning, we should see:",
-          detail: ind,
-        });
-      });
-      m[sc.id] = rows;
-    });
-    return m;
-  }, []);
+  const driverValues = useTrajectoryStore(s => s.driverValues);
+  const probs = Object.fromEntries(computeScenarioProbabilities(driverValues).map(p => [p.id, p.probability]));
+  const findings = coherenceFindings();
+  const flagged = new Map(findings.map(f => [f.driverId as string, f]));
+  const maxWeight = Math.max(...SCENARIOS.flatMap(s => Object.values(s.driverWeights).map(w => Math.abs(w ?? 0))));
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto space-y-6" data-testid="page-assumptions">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-xl font-semibold" data-testid="text-assumptions-title">
-            Assumption ledger
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1 max-w-2xl">
-            Each scenario rests on a worldview, a weight for each driver, and early indicators.
-            Mark the ones you disagree with.
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" data-testid="badge-disagreements">
-            {disagreeCount} / {total} flagged
-          </Badge>
-          {disagreeCount > 0 && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={clearDisagreements}
-              data-testid="button-clear-disagreements"
-            >
-              <RotateCcw className="h-3.5 w-3.5 mr-1" /> Clear
-            </Button>
-          )}
-        </div>
-      </div>
+    <div className={PAGE_CLASS} data-testid="page-assumptions">
+      <PageHeader title="Assumptions" />
 
-      {/* B9 — coherence findings surfaced up top so structural issues aren't buried */}
-      {(() => {
-        const findings = coherenceFindings();
-        if (findings.length === 0) return null;
-        return (
-          <Card className="border-warning/40 bg-warning/5" data-testid="card-coherence">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-warning" />
-                Structural findings ({findings.length})
-              </CardTitle>
-              <p className="text-xs text-muted-foreground mt-1">
-                Scenario–driver weights that look inconsistent. Worth a human check.
-              </p>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-2">
-              {findings.map((f, i) => (
-                <div key={i} className="flex items-start gap-2 text-xs" data-testid={`finding-${f.driverId}-${f.kind}`}>
-                  <Badge variant="outline" className="text-[11px] shrink-0 mt-1">
-                    {f.kind.replace("_", " ")}
-                  </Badge>
-                  <span className="text-muted-foreground">{f.detail}</span>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        );
-      })()}
-
-      <div className="space-y-3">
-        {SCENARIOS.map((sc) => {
-          const rows = rowsFor[sc.id] ?? [];
-          const disagreeInScenario = rows.filter((r) =>
-            (`${sc.id}:${r.key}` in disagreements),
-          ).length;
-          const isOpen = expanded === sc.id;
-          return (
-            <Card key={sc.id} data-testid={`card-scenario-${sc.id}`}>
-              <button
-                className="w-full text-left"
-                onClick={() => setExpanded(isOpen ? null : sc.id)}
-                data-testid={`button-expand-${sc.id}`}
-              >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start gap-3">
-                    <div
-                      className="w-1 rounded self-stretch shrink-0"
-                      style={{ backgroundColor: sc.color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-sm flex items-center gap-2">
-                        {isOpen ? (
-                          <ChevronDown className="h-4 w-4" />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" />
-                        )}
-                        {sc.name}
-                      </CardTitle>
-                      <p className="text-xs text-muted-foreground mt-1">{sc.tagline}</p>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 shrink-0">
-                      <Badge variant="secondary" className="text-xs">
-                        {rows.length} assumptions
-                      </Badge>
-                      {disagreeInScenario > 0 && (
-                        <Badge
-                          variant="outline"
-                          className="text-xs"
-                          data-testid={`badge-scenario-flagged-${sc.id}`}
-                        >
-                          <MessageSquareWarning className="h-3 w-3 mr-1" />
-                          {disagreeInScenario} flagged
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardHeader>
-              </button>
-              {isOpen && (
-                <CardContent className="pt-0 space-y-3">
-                  <Separator />
-
-                  {/* B6 — historical analog panel per scenario */}
-                  {(() => {
-                    const analogs = HISTORICAL_ANALOGS.filter((a) => a.scenarioId === sc.id);
-                    if (analogs.length === 0) return null;
-                    return (
-                      <div className="rounded-md border border-border bg-muted/10 p-3 space-y-2" data-testid={`historical-${sc.id}`}>
-                        <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                          <History className="h-3.5 w-3.5" />
-                          Historical analogs
-                        </div>
-                        <p className="text-[11px] text-muted-foreground">
-                          Past events with a similar shape, for checking the probability against.
-                        </p>
-                        <div className="space-y-2">
-                          {analogs.map((a, i) => (
-                            <div key={i} className="text-sm border-l-2 pl-3" style={{ borderColor: sc.color }}>
-                              <div className="flex items-baseline gap-2 flex-wrap">
-                                <span className="font-medium">{a.name}</span>
-                                <span className="text-xs text-muted-foreground font-mono">{a.years}</span>
-                                <Badge variant="outline" className="text-[11px]">
-                                  base rate ~{(a.baseRate * 100).toFixed(0)}%
-                                </Badge>
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1">
-                                <b className="text-foreground/80">Maps because:</b> {a.mapsBecause}
-                              </div>
-                              <div className="text-xs text-muted-foreground mt-1">
-                                <b className="text-foreground/80">Disanalogy:</b> {a.disanalogies}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                  {rows.map((row) => {
-                    const key = `${sc.id}:${row.key}`;
-                    const flagged = key in disagreements;
-                    return (
-                      <div
-                        key={row.key}
-                        className={`rounded-md border p-3 space-y-2 ${
-                          flagged ? "border-warning/60 bg-warning/5" : "border-border"
-                        }`}
-                        data-testid={`assumption-${sc.id}-${row.key}`}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
-                              <span>{row.kind}</span>
-                              {row.weight !== undefined && (
-                                <Badge variant="outline" className="text-[11px] h-4 px-1">
-                                  weight {row.weight > 0 ? "+" : ""}
-                                  {row.weight.toFixed(2)}
-                                </Badge>
-                              )}
-                            </div>
-                            <div className="text-sm font-medium mt-1">{row.label}</div>
-                            <div className="text-sm text-muted-foreground mt-1">
-                              {row.detail}
-                            </div>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <Card className="p-4 xl:col-span-7 overflow-x-auto" data-testid="card-weights">
+          <h2 className="text-sm font-semibold mb-3">Driver weights</h2>
+          <table className="w-full min-w-[560px] table-fixed text-xs font-mono">
+            <colgroup>
+              <col className="w-[26%]" />
+              {SCENARIOS.map(s => <col key={s.id} />)}
+              <col className="w-[9%]" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th />
+                {SCENARIOS.map(s => (
+                  <th key={s.id} className="px-1 pb-2 align-bottom text-[11px] font-normal text-muted-foreground leading-tight">
+                    <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: s.color }} />{s.name}
+                  </th>
+                ))}
+                <th className="px-1 pb-2 align-bottom text-right text-[11px] font-normal text-muted-foreground">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {DRIVERS.map(d => {
+                const total = SCENARIOS.reduce((sum, s) => sum + Math.abs(weightOf(s.id, d.id)), 0);
+                const flag = flagged.get(d.id);
+                return (
+                  <tr key={d.id} data-testid={`weights-${d.id}`}>
+                    <td className="pr-2 truncate font-sans">{d.label}</td>
+                    {SCENARIOS.map(s => {
+                      const w = weightOf(s.id, d.id);
+                      return (
+                        <td key={s.id} className="p-0">
+                          <div className="h-7 grid place-items-center border border-background tabular-nums bg-muted/30" style={w === 0 ? undefined : { backgroundColor: heat(w, maxWeight) }}>
+                            {w === 0 ? "" : `${w > 0 ? "+" : ""}${w.toFixed(1)}`}
                           </div>
-                          <Button
-                            size="sm"
-                            variant={flagged ? "default" : "outline"}
-                            onClick={() => toggleDisagreement(sc.id, row.key)}
-                            data-testid={`button-disagree-${sc.id}-${row.key}`}
-                            className="shrink-0"
-                          >
-                            {flagged ? (
-                              <>
-                                <Check className="h-3.5 w-3.5 mr-1" /> Flagged
-                              </>
-                            ) : (
-                              <>I disagree</>
-                            )}
-                          </Button>
-                        </div>
-                        {flagged && (
-                          <Textarea
-                            value={disagreements[key] ?? ""}
-                            onChange={(e) => setDisagreementNote(sc.id, row.key, e.target.value)}
-                            placeholder="Why do you disagree?"
-                            className="text-sm"
-                            rows={2}
-                            data-testid={`textarea-disagree-${sc.id}-${row.key}`}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </CardContent>
-              )}
-            </Card>
-          );
-        })}
+                        </td>
+                      );
+                    })}
+                    <td className={`pl-2 text-right tabular-nums ${flag ? "text-warning" : "text-muted-foreground"}`} title={flag?.detail}>
+                      {flag && <AlertTriangle className="inline w-3 h-3 mr-1 -mt-1" />}{total.toFixed(1)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {findings.length > 0 && (
+            <ul className="mt-3 space-y-1 text-xs text-muted-foreground font-sans" data-testid="card-coherence">
+              {findings.map(f => {
+                const label = DRIVERS.find(d => d.id === f.driverId)?.label ?? f.driverId;
+                return (
+                  <li key={`${f.driverId}-${f.kind}`} className="flex items-center gap-2">
+                    <AlertTriangle className="w-3 h-3 text-warning shrink-0" />
+                    {f.kind === "dead_driver"
+                      ? `${label} has almost no weight in any scenario.`
+                      : f.kind === "overweight"
+                        ? `${label} has a total weight above 3.5.`
+                        : f.detail}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+        <div className="xl:col-span-5"><CorrelationMatrix /></div>
       </div>
-      <CorrelationMatrix />
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {SCENARIOS.map(sc => (
+          <Card key={sc.id} className="p-4" data-testid={`card-scenario-${sc.id}`}>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: sc.color }} />
+              <h2 className="text-sm font-semibold flex-1 truncate">{sc.name}</h2>
+              <span className="text-sm font-mono tabular-nums">{((probs[sc.id] ?? 0) * 100).toFixed(1)}%</span>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">{sc.narrativeShort}</p>
+            <div className="mt-3 text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Watch for</div>
+            <ul className="mt-1 space-y-1 text-xs list-disc pl-4 marker:text-muted-foreground">
+              {sc.earlyIndicators.map((ind, i) => <li key={i}>{ind}</li>)}
+            </ul>
+            <div className="mt-3 text-[11px] uppercase tracking-widest font-mono text-muted-foreground">Precedents</div>
+            <ul className="mt-1 space-y-1 text-xs">
+              {HISTORICAL_ANALOGS.filter(a => a.scenarioId === sc.id).map(a => (
+                <li key={a.name} className="flex items-baseline gap-2" title={`${a.mapsBecause} ${a.disanalogies}`}>
+                  <span className="flex-1 truncate">{a.name}</span>
+                  <span className="font-mono tabular-nums text-muted-foreground whitespace-nowrap">{a.years}</span>
+                  <span className="font-mono tabular-nums w-10 text-right">{(a.baseRate * 100).toFixed(0)}%</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

@@ -1,121 +1,52 @@
-import { useState } from "react";
-import { DRIVERS, CORRELATIONS, DriverId } from "../../../shared/model";
+import { DRIVERS, CORRELATIONS, type DriverId } from "../../../shared/model";
 import { Card } from "@/components/ui/card";
-import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 
+const correlation = (from: DriverId, to: DriverId) => (from === to ? 1 : CORRELATIONS[from]?.[to] ?? 0);
+
+export const heat = (v: number, max = 1) =>
+  v === 0 ? "transparent" : `hsl(var(${v > 0 ? "--positive" : "--negative"}) / ${Math.min(1, Math.abs(v) / max) * 0.7 + 0.08})`;
+
+/** Row driver moves column driver. Fluid: cells share the card's width. */
 export function CorrelationMatrix() {
-  const drivers = DRIVERS;
-  const [hoveredRow, setHoveredRow] = useState<DriverId | null>(null);
-  const [hoveredCol, setHoveredCol] = useState<DriverId | null>(null);
-
-  const getCorrelation = (from: DriverId, to: DriverId): number => {
-    if (from === to) return 1;
-    return CORRELATIONS[from]?.[to] ?? 0;
-  };
-
-  const colorFor = (v: number): string => {
-    if (v === 0) return "hsl(var(--muted) / 0.3)";
-    const intensity = Math.abs(v);
-    if (v > 0) return `hsla(142, 71%, 50%, ${intensity})`;
-    return `hsla(0, 72%, 55%, ${intensity})`;
-  };
-
   return (
-    <Card className="p-4 border-border/50">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold">Driver correlations</h2>
-        <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "hsla(0, 72%, 55%, 0.8)" }} />
-            <span>−</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "hsla(142, 71%, 50%, 0.8)" }} />
-            <span>+</span>
-          </div>
-        </div>
-      </div>
-
-      {hoveredRow && (
-        <div className="text-[11px] font-mono text-muted-foreground mb-2 truncate" data-testid="corr-hovered-label">
-          <span className="text-accent">▸</span> {drivers.find(d => d.id === hoveredRow)?.label}
-        </div>
-      )}
-
-      <div className="overflow-x-auto">
-        <table className="text-[11px] font-mono">
-          <thead>
-            <tr>
-              <th className="p-1"></th>
-              {drivers.map(d => (
-                <th
-                  key={d.id}
-                  className={`p-1 w-6 h-24 relative cursor-pointer transition-colors ${
-                    hoveredCol === d.id ? "bg-accent/10" : ""
-                  }`}
-                  onMouseEnter={() => setHoveredCol(d.id)}
-                  onMouseLeave={() => setHoveredCol(null)}
-                >
-                  <div className={`absolute bottom-1 left-1/2 origin-bottom-left rotate-[-60deg] whitespace-nowrap transition-colors ${
-                    hoveredCol === d.id ? "text-foreground" : "text-muted-foreground"
-                  }`}>
-                    {d.label}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {drivers.map(rowD => {
-              const rowHovered = hoveredRow === rowD.id;
-              return (
-                <tr
-                  key={rowD.id}
-                  onMouseEnter={() => setHoveredRow(rowD.id)}
-                  onMouseLeave={() => setHoveredRow(null)}
-                  className={rowHovered ? "bg-accent/5" : ""}
-                >
-                  <td className={`p-1 text-right pr-2 whitespace-nowrap max-w-[140px] truncate transition-colors ${
-                    rowHovered ? "text-foreground" : "text-muted-foreground"
-                  }`}>
-                    {rowD.label}
+    <Card className="p-4 h-full">
+      <h2 className="text-sm font-semibold mb-3">Driver correlations</h2>
+      <table className="w-full table-fixed text-[11px] font-mono">
+        <colgroup>
+          <col className="w-[38%]" />
+          {DRIVERS.map(d => <col key={d.id} />)}
+        </colgroup>
+        <thead>
+          <tr>
+            <th />
+            {DRIVERS.map(d => (
+              <th key={d.id} className="h-24 relative font-normal">
+                <div className="absolute bottom-1 left-1/2 origin-bottom-left -rotate-[60deg] whitespace-nowrap text-muted-foreground">{d.label}</div>
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {DRIVERS.map(row => (
+            <tr key={row.id}>
+              <td className="pr-2 text-right truncate text-muted-foreground">{row.label}</td>
+              {DRIVERS.map(col => {
+                const v = correlation(row.id, col.id);
+                return (
+                  <td key={col.id} className="p-0">
+                    <div
+                      className="h-6 border border-background bg-muted/30"
+                      style={v === 0 ? undefined : { backgroundColor: heat(v) }}
+                      title={v === 0 || row.id === col.id ? undefined : `${row.label} → ${col.label}: ${v > 0 ? "+" : ""}${v.toFixed(2)}`}
+                      data-testid={`corr-${row.id}-${col.id}`}
+                    />
                   </td>
-                  {drivers.map(colD => {
-                    const v = getCorrelation(rowD.id, colD.id);
-                    const dim = hoveredRow && !rowHovered && hoveredCol !== colD.id;
-                    return (
-                      <td key={colD.id} className="p-0">
-                        <HoverCard openDelay={200}>
-                          <HoverCardTrigger asChild>
-                            <div
-                              className={`w-6 h-6 border border-background hover:border-accent transition-all cursor-help ${
-                                dim ? "opacity-30" : "opacity-100"
-                              }`}
-                              style={{ backgroundColor: colorFor(v) }}
-                              data-testid={`corr-${rowD.id}-${colD.id}`}
-                            />
-                          </HoverCardTrigger>
-                          {v !== 0 && (
-                            <HoverCardContent className="text-xs w-64">
-                              <div className="font-medium">{rowD.label} → {colD.label}</div>
-                              <div className="font-mono text-xs mt-1" style={{ color: v > 0 ? "hsl(var(--positive))" : "hsl(var(--negative))" }}>
-                                {v > 0 ? "+" : ""}{v.toFixed(2)}
-                              </div>
-                              <div className="text-muted-foreground text-xs mt-1">
-                                A {Math.abs(v * 100).toFixed(0)}% {v > 0 ? "positive" : "inverse"} shift propagates from {rowD.label.toLowerCase()} to {colD.label.toLowerCase()}.
-                              </div>
-                            </HoverCardContent>
-                          )}
-                        </HoverCard>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </Card>
   );
 }

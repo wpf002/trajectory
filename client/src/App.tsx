@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Switch, Route, Router } from "wouter";
+import { Switch, Route, Router, Redirect } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
@@ -14,14 +14,9 @@ import { DRIVERS, DriverId } from "../../shared/model";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Signals from "@/pages/Signals";
-import External from "@/pages/External";
 import Calibration from "@/pages/Calibration";
-import ModelReleases from "@/pages/ModelReleases";
 import Assumptions from "@/pages/Assumptions";
-import Watchlist from "@/pages/Watchlist";
-import Portfolio from "@/pages/Portfolio";
-import Decisions from "@/pages/Decisions";
-import Sources from "@/pages/Sources";
+import Plan from "@/pages/Plan";
 
 /**
  * Hydrate driver state from URL query params (e.g. ?ai_capability=72&labor_automation=41).
@@ -123,14 +118,16 @@ function AppRouter() {
           <Switch>
             <Route path="/" component={Dashboard} />
             <Route path="/signals" component={Signals} />
-            <Route path="/external" component={External} />
             <Route path="/calibration" component={Calibration} />
-            <Route path="/model-releases" component={ModelReleases} />
             <Route path="/assumptions" component={Assumptions} />
-            <Route path="/watchlist" component={Watchlist} />
-            <Route path="/portfolio" component={Portfolio} />
-            <Route path="/decisions" component={Decisions} />
-            <Route path="/sources" component={Sources} />
+            <Route path="/plan" component={Plan} />
+            {/* Old routes, folded into the pages above. */}
+            <Route path="/sources"><Redirect to="/signals" /></Route>
+            <Route path="/external"><Redirect to="/calibration" /></Route>
+            <Route path="/model-releases"><Redirect to="/calibration" /></Route>
+            <Route path="/watchlist"><Redirect to="/plan" /></Route>
+            <Route path="/portfolio"><Redirect to="/plan" /></Route>
+            <Route path="/decisions"><Redirect to="/plan" /></Route>
             <Route component={NotFound} />
           </Switch>
         </main>

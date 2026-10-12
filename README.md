@@ -17,7 +17,7 @@ npm run dev
 Then open http://localhost:5000. The SQLite database bootstraps itself on first boot
 (`data.db`, created in the repo root and gitignored), so a fresh clone comes up empty but
 fully working — add signals by hand on the Signals page, or run the collectors from the
-Sources page to populate it from live data.
+Signals page (Run collectors) to populate it from live data.
 
 To use a different port: `PORT=5173 npm run dev`. On macOS you generally need to — port
 5000 is held by Control Center's AirPlay Receiver unless you turn it off in
@@ -43,8 +43,8 @@ before the logistic, so the result doesn't depend on arrival order and a driver 
 still responds to new signals. Every signal writes a `forecast_history` snapshot, which
 feeds the history chart.
 
-**Assumptions** are inspectable: the Assumptions page lists every driver weight and early
-indicator behind each scenario, and lets you record disagreement with any of them.
+**Assumptions** are inspectable: the Assumptions page shows the driver-by-scenario weight
+table, the driver correlation matrix, and each scenario's early indicators and precedents.
 
 ## Analysis pipeline
 
@@ -65,7 +65,7 @@ cp .env.example .env   # then fill in ANTHROPIC_API_KEY
 
 ## Collectors
 
-`POST /api/collectors/run` (or the button on the Sources page) pulls from three live,
+`POST /api/collectors/run` (or Run collectors on the Signals page) pulls from three live,
 keyless sources:
 
 - **Hacker News** — top stories over 100 points, filtered to AI/tech topics.
@@ -104,7 +104,7 @@ evaluates the watchlist. Point a daily cron at it to keep the forecast advancing
 ## Layout
 
 ```
-client/src/pages/      one file per route (Dashboard, Signals, Calibration, …)
+client/src/pages/      Dashboard, Signals, Calibration, Assumptions, Plan
 client/src/components/ shared visualizations (correlation matrix, provenance graph, …)
 server/app.ts          Express app + error handling (used by index.ts and the tests)
 server/routes.ts       the whole HTTP API

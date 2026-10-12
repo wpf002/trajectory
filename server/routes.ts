@@ -92,12 +92,16 @@ async function fetchMetaculusAGI(): Promise<ExternalForecast[]> {
 async function fetchManifoldAGI(): Promise<ExternalForecast[]> {
   const results: ExternalForecast[] = [];
   try {
-    const r = await fetch('https://api.manifold.markets/v0/search-markets?term=AGI&limit=8&sort=most-popular', {
+    const r = await fetch('https://api.manifold.markets/v0/search-markets?term=AGI&limit=30&sort=most-popular', {
       headers: { 'User-Agent': 'Trajectory-Forecasting/1.0' }
     });
     if (r.ok) {
       const markets: any[] = await r.json();
-      for (const m of markets.slice(0, 8)) {
+      // Open binary markets only. The unfiltered top 8 included markets that
+      // closed in 2024 and 2025 and ones with no probability at all.
+      const open = markets.filter(m =>
+        !m.isResolved && typeof m.probability === "number" && (!m.closeTime || m.closeTime > Date.now()));
+      for (const m of open.slice(0, 8)) {
         results.push({
           source: 'manifold',
           question: m.question,
@@ -377,7 +381,15 @@ export async function registerRoutes(
         result = heuristicAnalyze(`${title}. ${body.text}`);
       }
       const { tier, domain } = classifySource(body.source);
-      res.json({ ...result, sourceTier: tier, sourceDomain: domain });
+      // weightedImpacts is what a client should store: the same
+      // impact x confidence x tier weight the ingest route writes. The Signals
+      // page used to save the raw driverImpacts, over-weighting manual signals.
+      res.json({
+        ...result,
+        sourceTier: tier,
+        sourceDomain: domain,
+        weightedImpacts: weightImpacts(result.driverImpacts, result.confidence, tierMultiplier(tier)),
+      });
     } catch (e: any) {
       res.status(500).json({ error: e.message });
     }

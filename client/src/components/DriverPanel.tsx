@@ -39,7 +39,7 @@ export function DriverPanel() {
           <div className="text-[11px] font-mono tracking-widest mb-1 text-muted-foreground">
             {CATEGORY_LABELS[category]}
           </div>
-          <div className="space-y-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-x-8 gap-y-2">
             {drivers.map(driver => {
               const value = driverValues[driver.id];
               // Top-2 scenarios this driver most influences (by |weight|). Reveals

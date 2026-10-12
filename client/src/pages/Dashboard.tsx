@@ -5,6 +5,7 @@ import { MilestoneTimeline } from "@/components/MilestoneTimeline";
 import { SensitivityPanel } from "@/components/SensitivityPanel";
 import { DriftChip } from "@/components/DriftChip";
 import { Card } from "@/components/ui/card";
+import { PAGE_CLASS } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -138,10 +139,10 @@ export default function Dashboard() {
   const timeString = `${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} · ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
 
   return (
-    <div className="p-4 sm:p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className={PAGE_CLASS}>
 
       {/* Hero: the forecast is the focal point of the page. */}
-      <section className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between pb-6 border-b border-border">
+      <section className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between pb-4 border-b border-border">
         <div className="min-w-0">
           <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground" data-testid="page-title">
             {tiedCount > 1 ? `Top ${tiedCount} tied` : whatIfActive ? "Most likely (what-if)" : "Most likely"}
@@ -162,27 +163,23 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col items-start lg:items-end gap-3 print:hidden">
-          {whatIfActive && (
-            <div className="flex items-center gap-2 rounded-md border border-accent/40 bg-accent/10 px-3 py-1 text-xs" data-testid="text-adjustments">
-              <span className="font-mono tabular-nums">What-if active</span>
-              <Button variant="ghost" size="sm" onClick={resetDrivers} className="h-6 px-2 text-xs gap-1">
-                <RotateCcw className="w-3 h-3" /> Reset
-              </Button>
-            </div>
-          )}
-          <div className="flex items-center gap-2">
+        <div className="print:hidden">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button variant="ghost" size="sm" onClick={undo} disabled={!canUndo}
-              className="h-8 px-2 text-xs gap-1" title="Undo driver change (Ctrl+Z)" data-testid="button-undo">
+              className="h-8 px-2 text-xs gap-1" title="Undo (Ctrl+Z)" data-testid="button-undo">
               <Undo2 className="w-3 h-3" /> Undo
             </Button>
             <Button variant="ghost" size="sm" onClick={redo} disabled={!canRedo}
-              className="h-8 px-2 text-xs gap-1" title="Redo driver change (Ctrl+Shift+Z)" data-testid="button-redo">
+              className="h-8 px-2 text-xs gap-1" title="Redo (Ctrl+Shift+Z)" data-testid="button-redo">
               <Redo2 className="w-3 h-3" /> Redo
+            </Button>
+            <Button variant="ghost" size="sm" onClick={resetDrivers} disabled={!whatIfActive}
+              className="h-8 px-2 text-xs gap-1" title="Back to the news forecast" data-testid="button-reset-drivers">
+              <RotateCcw className="w-3 h-3" /> Reset
             </Button>
             <div className="h-4 border-l border-border mx-1" />
             <Button variant="outline" size="sm" onClick={handleShare}
-              className="h-8 px-3 text-xs gap-1" title="Copy shareable snapshot link" data-testid="button-share">
+              className="h-8 px-3 text-xs gap-1" data-testid="button-share">
               <Share2 className="w-3 h-3" /> Share
             </Button>
             <DropdownMenu>
@@ -207,62 +204,44 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* Main grid: on mobile stack in a purposeful order (scenarios first as the headline output),
-          on desktop use 3-column layout. */}
+      {/* xl: drivers left, scenarios right with milestones and levers under them;
+          the bottom row flexes so both sides end on the same line. Below xl the
+          right-hand wrapper is display:contents and the cards stack in order:
+          scenarios, drivers (two columns of sliders), then milestones + levers. */}
       <div className="grid grid-cols-12 gap-4">
-        {/* MOBILE-ONLY: scenarios first so the model result is what you see immediately */}
-        <div className="col-span-12 lg:hidden">
-          <Card className="p-3">
-            <div className="flex items-center gap-2 mb-3">
-              <Radio className="w-3.5 h-3.5 text-accent" />
-              <h2 className="text-sm font-semibold">Scenarios</h2>
-              
-            </div>
-            <ScenarioProbability compareBaseline={compareBaseline} baselineProbs={baselineProbs} />
-          </Card>
-        </div>
+        <Card className="p-4 col-span-12 xl:col-span-4 order-2 xl:order-1">
+          <div className="flex items-center gap-2 mb-3">
+            <GitBranch className="w-3 h-3 text-accent" />
+            <h2 className="text-sm font-semibold">Drivers</h2>
+          </div>
+          <DriverPanel />
+        </Card>
 
-        {/* LEFT: drivers */}
-        <div className="col-span-12 lg:col-span-3">
-          <Card className="p-3">
+        <div className="contents xl:flex xl:flex-col xl:gap-4 xl:col-span-8 xl:order-2">
+          <Card className="p-4 col-span-12 order-1">
             <div className="flex items-center gap-2 mb-3">
-              <GitBranch className="w-3.5 h-3.5 text-accent" />
-              <h2 className="text-sm font-semibold">Drivers</h2>
-              
-            </div>
-            <DriverPanel />
-          </Card>
-        </div>
-
-        {/* CENTER: scenarios (desktop only) + milestones */}
-        <div className="col-span-12 lg:col-span-6 space-y-4">
-          <Card className="p-3 hidden lg:block">
-            <div className="flex items-center gap-2 mb-3">
-              <Radio className="w-3.5 h-3.5 text-accent" />
+              <Radio className="w-3 h-3 text-accent" />
               <h2 className="text-sm font-semibold">Scenarios</h2>
-              <div className="ml-auto flex items-center gap-2">
-                {whatIfActive && <Button
+              {whatIfActive && (
+                <Button
                   variant={compareBaseline ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setCompareBaseline(v => !v)}
-                  className="h-6 px-2 text-[11px] font-mono gap-1"
+                  className="ml-auto h-6 px-2 text-[11px] font-mono gap-1"
                   data-testid="button-compare-baseline"
                 >
                   <GitCompare className="w-3 h-3" />
-                  {compareBaseline ? "Hide news forecast" : "Compare to news"}
-                </Button>}
-              </div>
+                  {compareBaseline ? "Hide news" : "Compare to news"}
+                </Button>
+              )}
             </div>
             <ScenarioProbability compareBaseline={compareBaseline} baselineProbs={baselineProbs} />
           </Card>
-          <MilestoneTimeline />
-        </div>
 
-        {/* RIGHT: what moves the forecast */}
-        <div className="col-span-12 lg:col-span-3">
-          <Card className="p-4 lg:sticky lg:top-4">
-            <SensitivityPanel />
-          </Card>
+          <div className="col-span-12 order-3 grid grid-cols-1 md:grid-cols-5 gap-4 xl:flex-1">
+            <div className="md:col-span-3 [&>*]:h-full"><MilestoneTimeline /></div>
+            <Card className="p-4 md:col-span-2"><SensitivityPanel /></Card>
+          </div>
         </div>
       </div>
 

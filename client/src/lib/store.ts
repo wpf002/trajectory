@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { DEFAULT_DRIVER_VALUES, applyCorrelations, computeScenarioProbabilities, forecastMilestones, squash, DriverId } from "../../../shared/model";
+import { DEFAULT_DRIVER_VALUES, applyCorrelations, computeScenarioProbabilities, forecastMilestones, DriverId } from "../../../shared/model";
 
 interface TrajectoryStore {
   driverValues: Record<DriverId, number>;
@@ -13,23 +13,14 @@ interface TrajectoryStore {
   loadNewsBaseline: (values: Record<DriverId, number>, meta: { asOf: number | null; signalCount: number }) => void;
   correlationsEnabled: boolean;
   correlationStrength: number; // 0-1
-  // Assumption disagreements: key = `${scenarioId}:${assumptionKey}`, value = note
-  disagreements: Record<string, string>;
-  // B7: time-decay half-life in days for signal impact freshness
-  decayHalfLifeDays: number;
   // G28: undo/redo history for driver adjustments
   history: Record<DriverId, number>[];
   future: Record<DriverId, number>[];
-  setDecayHalfLifeDays: (v: number) => void;
   setDriverValue: (id: DriverId, value: number) => void;
   resetDrivers: () => void;
   setCorrelationsEnabled: (v: boolean) => void;
   setCorrelationStrength: (v: number) => void;
   applyPresetValues: (values: Partial<Record<DriverId, number>>) => void;
-  applySignalImpact: (impacts: Record<string, number>) => void;
-  toggleDisagreement: (scenarioId: string, assumptionKey: string, note?: string) => void;
-  setDisagreementNote: (scenarioId: string, assumptionKey: string, note: string) => void;
-  clearDisagreements: () => void;
   undo: () => boolean;
   redo: () => boolean;
   canUndo: () => boolean;
@@ -55,11 +46,8 @@ export const useTrajectoryStore = create<TrajectoryStore>((set, get) => ({
   },
   correlationsEnabled: true,
   correlationStrength: 0.35,
-  disagreements: {},
-  decayHalfLifeDays: 30,
   history: [],
   future: [],
-  setDecayHalfLifeDays: (v) => set({ decayHalfLifeDays: v }),
   setDriverValue: (id, value) => {
     const state = get();
     const newValues = state.correlationsEnabled
@@ -81,24 +69,6 @@ export const useTrajectoryStore = create<TrajectoryStore>((set, get) => ({
       history: [...state.history, state.driverValues].slice(-MAX_HISTORY),
       future: [],
     }));
-  },
-  applySignalImpact: (impacts) => {
-    set(state => {
-      const newValues = { ...state.driverValues };
-      for (const [driver, delta] of Object.entries(impacts)) {
-        const d = driver as DriverId;
-        if (d in newValues && Number.isFinite(delta)) {
-          // Same log-odds nudge the server's fold uses, so a signal moves the
-          // dashboard by what it moves the forecast.
-          newValues[d] = squash(newValues[d], delta);
-        }
-      }
-      return {
-        driverValues: newValues,
-        history: [...state.history, state.driverValues].slice(-MAX_HISTORY),
-        future: [],
-      };
-    });
   },
   undo: () => {
     const state = get();
@@ -124,23 +94,6 @@ export const useTrajectoryStore = create<TrajectoryStore>((set, get) => ({
   },
   canUndo: () => get().history.length > 0,
   canRedo: () => get().future.length > 0,
-  toggleDisagreement: (scenarioId, assumptionKey, note = "") => {
-    const key = `${scenarioId}:${assumptionKey}`;
-    set(state => {
-      const next = { ...state.disagreements };
-      if (key in next) {
-        delete next[key];
-      } else {
-        next[key] = note;
-      }
-      return { disagreements: next };
-    });
-  },
-  setDisagreementNote: (scenarioId, assumptionKey, note) => {
-    const key = `${scenarioId}:${assumptionKey}`;
-    set(state => ({ disagreements: { ...state.disagreements, [key]: note } }));
-  },
-  clearDisagreements: () => set({ disagreements: {} }),
 }));
 
 export { computeScenarioProbabilities, forecastMilestones };
