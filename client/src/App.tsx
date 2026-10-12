@@ -113,7 +113,6 @@ function AppRouter() {
       <Sidebar
         open={navOpen}
         onClose={() => setNavOpen(false)}
-        onShowShortcuts={() => setShowShortcuts(true)}
       />
       <div className="flex-1 min-w-0 flex flex-col">
         <MobileHeader

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
 import {
   Activity,
@@ -6,12 +6,9 @@ import {
   Globe2,
   LineChart,
   GaugeCircle,
-  RotateCcw,
   Menu,
   X,
   Keyboard,
-  Download,
-  Share2,
   Cpu,
   ClipboardCheck,
   Bell,
@@ -19,25 +16,13 @@ import {
   BookOpen,
   Database,
 } from "lucide-react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import type { WatchlistItem } from "@shared/schema";
-import { apiRequest } from "@/lib/queryClient";
 import { PRESETS, computeScenarioProbabilities } from "../../../shared/model";
 import { useTrajectoryStore } from "@/lib/store";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { PresetPreviewButton } from "@/components/PresetPreviewButton";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useToast } from "@/hooks/use-toast";
@@ -105,13 +90,11 @@ export function MobileHeader({ onOpen, onShowShortcuts }: { onOpen: () => void; 
 interface SidebarProps {
   open: boolean;
   onClose: () => void;
-  onShowShortcuts?: () => void;
 }
 
-export function Sidebar({ open, onClose, onShowShortcuts }: SidebarProps) {
+export function Sidebar({ open, onClose }: SidebarProps) {
   const [location] = useLocation();
   const {
-    resetDrivers,
     applyPresetValues,
     driverValues,
     correlationsEnabled,
@@ -127,21 +110,7 @@ export function Sidebar({ open, onClose, onShowShortcuts }: SidebarProps) {
     const p = Object.fromEntries(computeScenarioProbabilities(newsBaseline).map(x => [x.id, x.probability * 100]));
     return alerts.filter(a => a.op === "gt" ? p[a.scenarioId] >= a.thresholdPct : p[a.scenarioId] <= a.thresholdPct).length;
   })();
-  const [resetDialogOpen, setResetDialogOpen] = useState(false);
-  const [resetScope, setResetScope] = useState<"drivers" | "signals" | "history" | "all">("drivers");
-  const qc = useQueryClient();
   const { toast } = useToast();
-
-  const resetMutation = useMutation({
-    mutationFn: async (scope: "signals" | "history" | "all") => {
-      await apiRequest("POST", "/api/reset", { scope });
-    },
-    onSuccess: (_, scope) => {
-      qc.invalidateQueries({ queryKey: ["/api/signals"] });
-      qc.invalidateQueries({ queryKey: ["/api/forecast-history"] });
-      toast({ title: "Reset applied", description: `Cleared ${scope}.` });
-    },
-  });
 
   // Close drawer on route change (mobile)
   useEffect(() => {
@@ -157,21 +126,6 @@ export function Sidebar({ open, onClose, onShowShortcuts }: SidebarProps) {
       document.body.style.overflow = "";
     };
   }, [open]);
-
-  function handleReset() {
-    if (resetScope === "drivers") {
-      resetDrivers();
-      toast({ title: "Drivers reset", description: "Sliders reset to the news forecast." });
-    } else if (resetScope === "all") {
-      resetDrivers();
-      resetMutation.mutate("all");
-    } else {
-      resetMutation.mutate(resetScope);
-    }
-    setResetDialogOpen(false);
-  }
-
-
 
   return (
     <>
@@ -301,25 +255,7 @@ export function Sidebar({ open, onClose, onShowShortcuts }: SidebarProps) {
 
         </div>
 
-        <div className="mt-auto p-3 border-t border-sidebar-border space-y-2">
-          <Button
-            onClick={() => setResetDialogOpen(true)}
-            variant="ghost"
-            size="sm"
-            className="w-full text-xs justify-start text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-            data-testid="button-reset-drivers"
-          >
-            <RotateCcw className="w-3 h-3 mr-2" /> Reset
-          </Button>
-          {onShowShortcuts && (
-            <button
-              onClick={onShowShortcuts}
-              className="hidden lg:flex items-center gap-2 w-full px-2 py-1 rounded text-[11px] font-mono text-sidebar-foreground/50 hover:text-sidebar-foreground/80 hover:bg-sidebar-accent/30 transition-colors"
-              data-testid="button-show-shortcuts"
-            >
-              <Keyboard className="w-3 h-3" /> Shortcuts (?)
-            </button>
-          )}
+        <div className="mt-auto p-3 border-t border-sidebar-border">
           <div className="text-[11px] font-mono text-sidebar-foreground/40 flex items-center gap-1">
             <Activity className="w-2.5 h-2.5" />
             <span>v1.1 · {new Date().getFullYear()}</span>
@@ -327,53 +263,6 @@ export function Sidebar({ open, onClose, onShowShortcuts }: SidebarProps) {
         </div>
       </aside>
 
-      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
-        <AlertDialogContent data-testid="dialog-reset">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reset scope</AlertDialogTitle>
-            <AlertDialogDescription>
-              Choose what to reset. Can't be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="space-y-2 py-2">
-            {[
-              { id: "drivers" as const, label: "Drivers only", desc: "Sliders back to the news forecast." },
-              { id: "signals" as const, label: "Signal history", desc: "Delete all ingested signals from the database." },
-              { id: "history" as const, label: "Forecast snapshots", desc: "Clear daily probability history." },
-              { id: "all" as const, label: "Everything", desc: "All of the above." },
-            ].map(opt => (
-              <label
-                key={opt.id}
-                className={`flex items-start gap-2 p-3 rounded-md border cursor-pointer transition-colors ${
-                  resetScope === opt.id
-                    ? "border-accent bg-accent/5"
-                    : "border-border hover:bg-muted/50"
-                }`}
-                data-testid={`reset-scope-${opt.id}`}
-              >
-                <input
-                  type="radio"
-                  name="reset-scope"
-                  value={opt.id}
-                  checked={resetScope === opt.id}
-                  onChange={() => setResetScope(opt.id)}
-                  className="mt-1 accent-accent"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium">{opt.label}</div>
-                  <div className="text-xs text-muted-foreground">{opt.desc}</div>
-                </div>
-              </label>
-            ))}
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel data-testid="button-cancel-reset">Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReset} data-testid="button-confirm-reset">
-              Reset {resetScope}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
