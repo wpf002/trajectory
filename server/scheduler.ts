@@ -5,9 +5,10 @@ import { log } from "./app";
 /**
  * Runs the collectors on an interval for as long as the server is up.
  *
- * It checks once a minute whether the last run is older than the interval,
- * rather than arming one long timer, so a laptop that slept through several
- * intervals catches up on wake and a restart doesn't reset the clock.
+ * It checks once a minute whether a run is due (the retry interval has passed
+ * and the paced daily budget has a slot free; see scheduledBudget in routes.ts)
+ * rather than arming one long timer, so a laptop that slept catches up on wake
+ * and a restart doesn't reset the clock.
  */
 export function startCollectorSchedule(app: Express) {
   const config = app.locals.collectorConfig as () => { intervalMinutes: number };
@@ -35,7 +36,7 @@ export function startCollectorSchedule(app: Express) {
     try {
       const out = await run({ trigger: first ? "startup" : "schedule" });
       first = false;
-      if (out?.ok) {
+      if (out?.ok && !out.skipped) {
         const applied = (out.processed ?? []).filter((p: any) => p.action === "applied").length;
         log(`${out.candidates} new stories, ${(out.processed ?? []).length} analyzed, ${applied} added${out.note ? ` (${out.note})` : ""}`, "collect");
       }
@@ -47,5 +48,5 @@ export function startCollectorSchedule(app: Express) {
   // First check shortly after boot, then every minute. unref: don't hold the process open.
   setTimeout(tick, 10_000).unref();
   setInterval(tick, 60_000).unref();
-  log(`collector schedule on: every ${config().intervalMinutes} min`, "collect");
+  log("collector schedule on", "collect");
 }

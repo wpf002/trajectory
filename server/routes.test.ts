@@ -285,14 +285,34 @@ test("a scheduled run leaves a headline unseen when the analyzer is unavailable"
   assert.equal(again.candidates, 1);
 });
 
-test("scheduled runs stop at the daily budget", async () => {
-  const before = (await api("GET", "/api/collectors/status")).data.schedule;
-  process.env.COLLECT_MAX_PER_DAY = String(before.analyzedToday); // budget exactly used
+test("scheduled runs are paced across the day, not spent at once", async () => {
+  const { storage } = await import("./storage");
+  const now = Math.floor(Date.now() / 1000);
+  const slot = 86400 / 6; // default COLLECT_MAX_PER_DAY
+
+  // A scheduled run analyzed something just now: no slot yet, so nothing is
+  // fetched and no run is recorded.
+  storage.addCollectorRun({ ranAt: now, trigger: "schedule", candidates: 3, analyzed: 1, applied: 1, errors: null });
+  const tooSoon = await locals.runCollectors({ trigger: "schedule" });
+  assert.equal(tooSoon.skipped, true);
+  assert.equal(storage.lastCollectorRun()!.ranAt, now);
+  const status = (await api("GET", "/api/collectors/status")).data.schedule;
+  assert.ok(status.nextRunAt === null || status.nextRunAt >= now + slot - 5);
+
+  // A manual check is not held to the schedule's pacing.
+  const manual = (await api("POST", "/api/collectors/run", {})).data;
+  assert.equal(manual.skipped, undefined);
+});
+
+test("a slot frees up after 24h / maxPerDay", async () => {
+  const { storage } = await import("./storage");
+  process.env.COLLECT_MAX_PER_DAY = "100000"; // slot under a second
   try {
+    await new Promise(r => setTimeout(r, 1100));
     const run = await locals.runCollectors({ trigger: "schedule" });
-    assert.equal(run.note, "daily budget used");
-    assert.equal(run.processed.length, 0);
+    assert.equal(run.skipped, undefined, "a paced slot is free, so the run goes ahead");
   } finally {
     delete process.env.COLLECT_MAX_PER_DAY;
   }
+  assert.ok(storage.lastCollectorRun());
 });

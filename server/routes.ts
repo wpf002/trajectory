@@ -728,15 +728,38 @@ export async function registerRoutes(
   // ---- Collectors ----
   const DAY_SEC = 86400;
   const collectorConfig = () => ({
-    /** Minutes between scheduled runs. 0 turns the schedule off. */
+    /** Minimum minutes between scheduled runs. 0 turns the schedule off. */
     intervalMinutes: Number(process.env.COLLECT_INTERVAL_MINUTES ?? 60),
     /** Stories a scheduled run may send to the analyzer. */
     maxPerRun: Number(process.env.COLLECT_MAX_PER_RUN ?? 2),
-    /** Analyzer calls scheduled runs may make per rolling 24 hours. */
+    /** Analyzer calls scheduled runs may make per rolling 24 hours, spread evenly. */
     maxPerDay: Number(process.env.COLLECT_MAX_PER_DAY ?? 6),
   });
   const SCHEDULED = ["schedule", "startup"];
   let collecting = false;
+
+  /**
+   * How many stories a scheduled run may analyze right now.
+   *
+   * The daily budget is paced, one slot every 24h / maxPerDay (4 hours at the
+   * default 6). Without pacing the whole day's budget went in the first three
+   * hourly runs after startup and the next twenty-one did nothing. Slots that
+   * went unused while the server was off accrue up to maxPerRun.
+   */
+  function scheduledBudget(nowSec: number) {
+    const cfg = collectorConfig();
+    const slotSec = DAY_SEC / Math.max(1, cfg.maxPerDay);
+    const lastAnalyzed = storage.lastAnalyzedAt(SCHEDULED);
+    const accrued = lastAnalyzed === null ? cfg.maxPerRun : Math.floor((nowSec - lastAnalyzed) / slotSec);
+    const leftToday = cfg.maxPerDay - storage.analyzedSince(nowSec - DAY_SEC, SCHEDULED);
+    let nextSlotAt = lastAnalyzed === null ? nowSec : lastAnalyzed + slotSec;
+    if (leftToday <= 0) {
+      // The 24-hour total is the binding limit: wait for the oldest run to age out.
+      const oldest = storage.firstAnalyzedSince(nowSec - DAY_SEC, SCHEDULED);
+      if (oldest !== null) nextSlotAt = Math.max(nextSlotAt, oldest + DAY_SEC);
+    }
+    return { budget: Math.max(0, Math.min(cfg.maxPerRun, accrued, leftToday)), nextSlotAt };
+  }
 
   /**
    * One collection pass: fetch every source, drop what has been seen, group
@@ -756,11 +779,10 @@ export async function registerRoutes(
       const nowSec = Math.floor(Date.now() / 1000);
       const cfg = collectorConfig();
       const scheduled = SCHEDULED.includes(opts.trigger);
-      let budget = opts.maxNew ?? (scheduled ? cfg.maxPerRun : 5);
-      if (scheduled) budget = Math.min(budget, Math.max(0, cfg.maxPerDay - storage.analyzedSince(nowSec - DAY_SEC, SCHEDULED)));
+      const budget = opts.maxNew ?? (scheduled ? scheduledBudget(nowSec).budget : 5);
+      // Nothing to spend yet: don't fetch, and don't record a run that didn't happen.
       if (budget <= 0) {
-        storage.addCollectorRun({ ranAt: nowSec, trigger: opts.trigger, candidates: 0, analyzed: 0, applied: 0, errors: null });
-        return { ok: true as const, collected: {}, collectorErrors: {}, candidates: 0, processed: [], note: "daily budget used" };
+        return { ok: true as const, skipped: true as const, collected: {}, collectorErrors: {}, candidates: 0, processed: [] };
       }
 
       const collected = await collectAll({ newsWindow: opts.newsWindow, newsOnly: opts.trigger === "backfill" });
@@ -849,6 +871,8 @@ export async function registerRoutes(
     const cfg = collectorConfig();
     const lastRun = storage.lastCollectorRun();
     const hasKey = Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN);
+    // Next run: when the retry interval has passed and a paced slot is free.
+    const nextRunAt = Math.max(nowSec, (lastRun?.ranAt ?? 0) + cfg.intervalMinutes * 60, scheduledBudget(nowSec).nextSlotAt);
     res.json({
       totalSignals: signals.length,
       tierAll,
@@ -862,7 +886,7 @@ export async function registerRoutes(
         maxPerDay: cfg.maxPerDay,
         analyzedToday: storage.analyzedSince(nowSec - DAY_SEC, SCHEDULED),
         lastRun,
-        nextRunAt: cfg.intervalMinutes > 0 && hasKey ? (lastRun?.ranAt ?? nowSec) + cfg.intervalMinutes * 60 : null,
+        nextRunAt: cfg.intervalMinutes > 0 && hasKey ? nextRunAt : null,
         running: collecting,
       },
     });

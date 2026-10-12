@@ -308,6 +308,18 @@ export const storage = {
     const row = sqlite.prepare(`SELECT COALESCE(SUM(analyzed), 0) n FROM collector_runs WHERE ran_at >= ? AND trigger IN (${marks})`).get(since, ...triggers) as { n: number };
     return row.n;
   },
+  /** When a run with one of these triggers last sent anything to the analyzer. */
+  lastAnalyzedAt(triggers: string[]): number | null {
+    const marks = triggers.map(() => "?").join(",");
+    const row = sqlite.prepare(`SELECT MAX(ran_at) t FROM collector_runs WHERE analyzed > 0 AND trigger IN (${marks})`).get(...triggers) as { t: number | null };
+    return row.t;
+  },
+  /** Oldest analyzing run since `since`: when it ages out, a day's-budget slot frees. */
+  firstAnalyzedSince(since: number, triggers: string[]): number | null {
+    const marks = triggers.map(() => "?").join(",");
+    const row = sqlite.prepare(`SELECT MIN(ran_at) t FROM collector_runs WHERE analyzed > 0 AND ran_at >= ? AND trigger IN (${marks})`).get(since, ...triggers) as { t: number | null };
+    return row.t;
+  },
   addCollectorRun(run: { ranAt: number; trigger: string; candidates: number; analyzed: number; applied: number; errors: string | null }) {
     sqlite.prepare("INSERT INTO collector_runs (ran_at, trigger, candidates, analyzed, applied, errors) VALUES (?, ?, ?, ?, ?, ?)")
       .run(run.ranAt, run.trigger, run.candidates, run.analyzed, run.applied, run.errors);

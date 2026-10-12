@@ -65,9 +65,9 @@ cp .env.example .env   # then fill in ANTHROPIC_API_KEY
 
 ## Collectors
 
-While the server is running it collects on its own: every `COLLECT_INTERVAL_MINUTES`
-(default 60) it pulls from four keyless sources, and on startup it runs straight away if
-the last run is older than that.
+While the server is running it collects on its own from four keyless sources. With the
+defaults it analyzes one story about every four hours (`COLLECT_MAX_PER_DAY` of 6, spread
+evenly), and on startup it runs straight away if a slot is free.
 
 - **News** — Google News RSS, eight searches covering the areas the drivers track. Each
   item carries its publisher (for source tiering) and publish time (stored as the signal's
@@ -81,7 +81,8 @@ the last run is older than that.
 A run does not analyze everything it finds (`server/headline-select.ts`). It drops what
 earlier runs already looked at, groups rewrites of the same story, ranks stories by how
 many outlets carried them, and sends the top `COLLECT_MAX_PER_RUN` (default 2) to the
-analyzer, up to `COLLECT_MAX_PER_DAY` (default 6) in any 24 hours. The cap is deliberate:
+analyzer, up to `COLLECT_MAX_PER_DAY` (default 6) in any 24 hours, paced one slot every
+24h / max so they don't all go at once. The cap is deliberate:
 driver values are a sum over signals, so the forecast moves with how many headlines are
 ingested as well as what they say, and the archive was built at about 3.5 a day. At the
 defaults a day costs about $0.10 in analyzer calls.
@@ -152,9 +153,9 @@ Routing is hash-based (`/#/signals`), so the built client works from a static ho
 | `ANALYZER_MODEL` | `claude-opus-5` | Model used for signal analysis |
 | `METACULUS_API_TOKEN` | — | Live Metaculus numbers. Without it the comparison uses a stored value and says so |
 | `SIGNAL_HALF_LIFE_DAYS` | `30` | How fast old signals fade |
-| `COLLECT_INTERVAL_MINUTES` | `60` | Minutes between collection runs; `0` turns the schedule off |
+| `COLLECT_INTERVAL_MINUTES` | `60` | Minimum minutes between collection runs; `0` turns the schedule off |
 | `COLLECT_MAX_PER_RUN` | `2` | Stories a scheduled run may analyze |
-| `COLLECT_MAX_PER_DAY` | `6` | Analyzer calls scheduled runs may make per 24 hours |
+| `COLLECT_MAX_PER_DAY` | `6` | Analyzer calls scheduled runs may make per 24 hours, spread evenly |
 | `DB_PATH` | `data.db` | SQLite file |
 | `PORT` | `5000` | Server port |
 | `HOST` | `0.0.0.0` | Bind address |
