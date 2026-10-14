@@ -170,7 +170,6 @@ test("Metaculus fallback is labeled snapshot and an unchanged repeat is skipped"
   const first = (await api("POST", "/api/calibration/residuals/refresh", {})).data;
   assert.equal(first.refreshed, 1);
   assert.equal(first.results[0].crowdSource, "snapshot");
-  assert.ok(first.skipped.some((s: any) => s.reason.includes("no snapshot")));
 
   const second = (await api("POST", "/api/calibration/residuals/refresh", {})).data;
   assert.equal(second.refreshed, 0);
@@ -180,6 +179,12 @@ test("Metaculus fallback is labeled snapshot and an unchanged repeat is skipped"
   const q = card.crowd.comparisons.find((c: any) => c.questionId === "11861");
   assert.equal(q.source, "snapshot");
   assert.equal(card.crowd.liveCount, 0);
+  // Ours is the summed probability of the four fast-capability scenarios.
+  const probs = (await api("GET", "/api/probabilities")).data.probabilities;
+  const fast = ["curiosity_renaissance", "oligarchic_capture", "fragmentation", "great_filter"];
+  const expected = probs.filter((p: any) => fast.includes(p.id)).reduce((a: number, p: any) => a + p.probability, 0);
+  assert.ok(Math.abs(q.ours - expected) < 1e-9);
+  assert.ok(Math.abs(q.residual - (q.ours - q.crowd)) < 1e-9);
 });
 
 test("watchlist reports a crossed threshold and ignores an uncrossed one", async () => {

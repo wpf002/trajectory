@@ -55,7 +55,6 @@ const parse = <T,>(json: string | null | undefined, fallback: T): T => {
   try { return json ? JSON.parse(json) : fallback; } catch { return fallback; }
 };
 const stamp = () => new Date().toISOString().slice(0, 10);
-const pp = (v: number) => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}pp`;
 
 const TH = "text-left text-[11px] font-medium text-muted-foreground px-3 pb-2";
 const TD = "px-3 py-2 text-xs";
@@ -160,7 +159,7 @@ export default function Calibration() {
   const pending = [...(scorecard?.releases.pending ?? [])].sort((a, b) => a.predicted - b.predicted);
   const overdue = pending.filter(p => p.overdue).length;
   const errorById = new Map((scorecard?.releases.resolved ?? []).map(r => [r.id, r.errorDays]));
-  const gap = scorecard?.crowd.comparisons.find(c => c.residual !== null) ?? null;
+  const gap = scorecard?.crowd.comparisons[0] ?? null;
 
   const nowSec = Math.floor(Date.now() / 1000);
   const upcoming = models.filter(m => !m.releaseDate).sort((a, b) => (a.predictedReleaseP50 ?? 0) - (b.predictedReleaseP50 ?? 0));
@@ -213,10 +212,10 @@ export default function Calibration() {
           ].filter(Boolean).join(" · ")}
         />
         <Stat
-          label="Vs Metaculus"
-          value={gap?.residual != null ? pp(gap.residual) : "No data"}
+          label="AGI Before 2030"
+          value={gap?.crowd != null ? `${(gap.ours! * 100).toFixed(0)}% vs ${(gap.crowd * 100).toFixed(0)}%` : "No data"}
           tag={gap?.source === "snapshot" ? "Stored" : undefined}
-          note={gap ? `${gap.title} · ours ${(gap.ours! * 100).toFixed(1)}%, crowd ${(gap.crowd! * 100).toFixed(1)}%` : undefined}
+          note="Trajectory vs Metaculus"
         />
       </Card>
 

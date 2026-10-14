@@ -123,32 +123,36 @@ let externalCache: { data: ExternalForecast[]; ts: number } | null = null;
 export function _resetExternalCache() { externalCache = null; }
 
 /**
- * Metaculus questions we track for calibration — mapped to a scenario id.
- * Each entry: which of our scenarios' probabilities should be compared to
- * this Metaculus market's crowd probability.
+ * Metaculus questions we compare against. A scenario isn't an event, so each
+ * question maps to the set of scenarios in which it resolves YES, and our
+ * probability is their sum.
+ *
+ * "Date of Weakly General AI" (3479) used to be listed against Managed
+ * Transition alone. It's a date question with no probability to compare, so
+ * every refresh skipped it; it's gone.
  */
 const CALIBRATION_QUESTIONS: Array<{
   metaculusQuestionId: string;
   metaculusQuestionTitle: string;
   metaculusUrl: string;
-  scenarioId: string;
-  scenarioLens: string; // brief description of the mapping
+  scenarioIds: string[];
+  scenarioLens: string;
 }> = [
   {
     metaculusQuestionId: "11861",
     metaculusQuestionTitle: "Will AGI arrive before 2030?",
     metaculusUrl: "https://www.metaculus.com/questions/11861/",
-    scenarioId: "curiosity_renaissance",
-    scenarioLens: "Fast-capability worlds require AGI-ish tech by 2030",
-  },
-  {
-    metaculusQuestionId: "3479",
-    metaculusQuestionTitle: "Date of Weakly General AI",
-    metaculusUrl: "https://www.metaculus.com/questions/3479/",
-    scenarioId: "managed_transition",
-    scenarioLens: "Managed-transition needs weakly-general AI to arrive by mid-2020s",
+    // Every scenario except Managed Transition and Compute Wall assumes
+    // capability runs ahead through the late 2020s.
+    scenarioIds: ["curiosity_renaissance", "oligarchic_capture", "fragmentation", "great_filter"],
+    scenarioLens: "Scenarios with AGI-level capability by 2030",
   },
 ];
+
+/** Our probability for a question: the summed probability of its YES scenarios. */
+function oursFor(q: (typeof CALIBRATION_QUESTIONS)[number], probs: Array<{ id: string; probability: number }>): number {
+  return probs.filter(p => q.scenarioIds.includes(p.id)).reduce((sum, p) => sum + p.probability, 0);
+}
 
 /**
  * Fetch a Metaculus question's current community probability. Returns null on
@@ -1083,7 +1087,7 @@ export async function registerRoutes(
     const skipped: Array<{ questionId: string; reason: string }> = [];
 
     for (const q of CALIBRATION_QUESTIONS) {
-      const ours = probs.find(p => p.id === q.scenarioId)?.probability ?? 0;
+      const ours = oursFor(q, probs);
       const live = await fetchMetaculusProbability(q.metaculusQuestionId);
       let crowd = live;
       let crowdSource: "live" | "snapshot" = "live";
@@ -1110,7 +1114,7 @@ export async function registerRoutes(
       }
 
       results.push(storage.addCalibrationResidual({
-        scenarioId: q.scenarioId,
+        scenarioId: q.scenarioIds.join("+"),
         metaculusQuestionId: q.metaculusQuestionId,
         metaculusQuestionTitle: q.metaculusQuestionTitle,
         metaculusUrl: q.metaculusUrl,
@@ -1167,17 +1171,21 @@ export async function registerRoutes(
     for (const r of storage.listCalibrationResiduals(500)) {
       if (!latestByQ.has(r.metaculusQuestionId)) latestByQ.set(r.metaculusQuestionId, r);
     }
+    // Ours is computed now rather than read from the stored row, so the card
+    // tracks the live forecast between refreshes of the crowd number.
+    const probsNow = computeScenarioProbabilities(computeCurrentDrivers());
     const crowd = CALIBRATION_QUESTIONS.map(q => {
       const r = latestByQ.get(q.metaculusQuestionId);
+      const ours = oursFor(q, probsNow);
       return {
         questionId: q.metaculusQuestionId,
         title: q.metaculusQuestionTitle,
         url: q.metaculusUrl,
-        scenarioId: q.scenarioId,
+        scenarioIds: q.scenarioIds,
         lens: q.scenarioLens,
-        ours: r?.ourProbability ?? null,
+        ours,
         crowd: r?.crowdProbability ?? null,
-        residual: r?.residual ?? null,
+        residual: r ? ours - r.crowdProbability : null,
         source: r?.crowdSource ?? null,
         asOf: r?.timestamp ?? null,
       };
