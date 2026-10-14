@@ -305,7 +305,7 @@ export default function Calibration() {
                     {f.source === "metaculus" ? "Metaculus" : "Manifold"}
                   </td>
                   <td className={`${TD} font-mono tabular-nums text-right whitespace-nowrap`}>
-                    {typeof f.probability === "number" ? `${(f.probability * 100).toFixed(1)}%` : f.medianYear ? <><span className="text-muted-foreground">median </span>{f.medianYear}</> : ""}
+                    {typeof f.probability === "number" ? `${(f.probability * 100).toFixed(1)}%` : f.medianYear ?? ""}
                   </td>
                   <td className={`${TD} font-mono tabular-nums text-right text-muted-foreground`}>{f.numForecasters?.toLocaleString() ?? ""}</td>
                   <td className={`${TD} font-mono tabular-nums text-right text-muted-foreground whitespace-nowrap pr-4`}>
