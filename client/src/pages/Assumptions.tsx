@@ -35,7 +35,7 @@ export default function Assumptions() {
                   <th key={s.id} className="px-1 pb-2 align-bottom font-sans text-[11px] font-normal text-muted-foreground leading-tight">
                     <div className="flex flex-col items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
-                      <span className="min-h-[2lh] flex items-end justify-center text-center">{s.name}</span>
+                      <span className="min-h-[2lh] text-center">{s.name}</span>
                     </div>
                   </th>
                 ))}
