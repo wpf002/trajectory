@@ -693,8 +693,8 @@ export const DEFAULT_DRIVER_VALUES: Record<DriverId, number> = Object.fromEntrie
   DRIVERS.map(d => [d.id, d.currentValue])
 ) as Record<DriverId, number>;
 
-// Presets: driver settings applied on top of the current values. Shocks are
-// single events; scenario presets push the model toward one world.
+// Presets: driver settings applied on top of the current values. Event presets
+// model one real-world event; scenario presets push the model toward one world.
 export interface PresetConfig {
   id: string;
   name: string;

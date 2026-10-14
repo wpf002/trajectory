@@ -222,7 +222,7 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
           <Separator className="bg-sidebar-border" />
 
-          {([["shock", "Shocks"], ["scenario", "Scenarios"]] as const).map(([group, title]) => (
+          {([["shock", "Events"], ["scenario", "Scenarios"]] as const).map(([group, title]) => (
             <div key={group}>
               <div className="text-[11px] uppercase tracking-widest text-sidebar-foreground/60 font-mono mb-1">{title}</div>
               <div>
