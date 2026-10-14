@@ -54,7 +54,7 @@ interface ExternalForecast {
 const METACULUS_SNAPSHOT: ExternalForecast[] = [
   {
     source: 'metaculus',
-    question: 'Date of Weakly General AI (Metaculus community forecast)',
+    question: 'Date of Weakly General AI',
     url: 'https://www.metaculus.com/questions/3479/date-weakly-general-ai-is-publicly-known/',
     medianYear: 2027,
     numForecasters: 1580,

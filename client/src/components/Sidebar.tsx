@@ -222,22 +222,24 @@ export function Sidebar({ open, onClose }: SidebarProps) {
 
           <Separator className="bg-sidebar-border" />
 
-          <div>
-            <div className="text-[11px] uppercase tracking-widest text-sidebar-foreground/60 font-mono mb-2">Presets</div>
-            <div className="space-y-1">
-              {PRESETS.map(p => (
-                <PresetPreviewButton
-                  key={p.id}
-                  preset={p}
-                  onApply={() => {
-                    applyPresetValues(p.values);
-                    toast({ title: `Applied: ${p.name}`, description: p.description });
-                  }}
-                  currentValues={driverValues}
-                />
-              ))}
+          {([["shock", "Shocks"], ["scenario", "Scenarios"]] as const).map(([group, title]) => (
+            <div key={group}>
+              <div className="text-[11px] uppercase tracking-widest text-sidebar-foreground/60 font-mono mb-1">{title}</div>
+              <div>
+                {PRESETS.filter(p => p.group === group).map(p => (
+                  <PresetPreviewButton
+                    key={p.id}
+                    preset={p}
+                    onApply={() => {
+                      applyPresetValues(p.values);
+                      toast({ title: `${p.name} applied` });
+                    }}
+                    currentValues={driverValues}
+                  />
+                ))}
+              </div>
             </div>
-          </div>
+          ))}
 
         </div>
 

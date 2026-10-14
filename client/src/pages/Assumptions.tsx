@@ -32,11 +32,14 @@ export default function Assumptions() {
               <tr>
                 <th />
                 {SCENARIOS.map(s => (
-                  <th key={s.id} className="px-1 pb-2 align-bottom text-[11px] font-normal text-muted-foreground leading-tight">
-                    <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ backgroundColor: s.color }} />{s.name}
+                  <th key={s.id} className="px-1 pb-2 align-bottom font-sans text-[11px] font-normal text-muted-foreground leading-tight">
+                    <div className="flex flex-col items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />
+                      <span className="min-h-[2lh] flex items-end justify-center text-center">{s.name}</span>
+                    </div>
                   </th>
                 ))}
-                <th className="px-1 pb-2 align-bottom text-right text-[11px] font-normal text-muted-foreground">Total</th>
+                <th className="px-1 pb-2 align-bottom text-right font-sans text-[11px] font-normal text-muted-foreground">Total</th>
               </tr>
             </thead>
             <tbody>

@@ -693,25 +693,123 @@ export const DEFAULT_DRIVER_VALUES: Record<DriverId, number> = Object.fromEntrie
   DRIVERS.map(d => [d.id, d.currentValue])
 ) as Record<DriverId, number>;
 
-// Presets: pre-configured driver settings representing different worldviews
+// Presets: driver settings applied on top of the current values. Shocks are
+// single events; scenario presets push the model toward one world.
 export interface PresetConfig {
   id: string;
   name: string;
+  group: 'shock' | 'scenario';
   description: string;
   values: Partial<Record<DriverId, number>>;
 }
 
 export const PRESETS: PresetConfig[] = [
   {
-    id: 'baseline_2026',
-    name: 'Baseline (Mid-2026)',
-    description: 'Observed reality as of July 2026. Reset to real-world anchors.',
-    values: DEFAULT_DRIVER_VALUES,
+    id: 'taiwan_blockade',
+    name: 'Taiwan Blockade',
+    group: 'shock',
+    description: 'Leading-edge chip supply stops. US-China contact freezes.',
+    values: {
+      geopolitical_stability: 0.08,
+      compute_growth: 0.45,
+      inference_cost_decline: 0.65,
+      capability_progress: 0.7,
+      information_trust: 0.22,
+    },
+  },
+  {
+    id: 'ai_bubble',
+    name: 'AI Bubble Pops',
+    group: 'shock',
+    description: 'Capex collapses. Labs cut training runs and adoption slows.',
+    values: {
+      compute_growth: 0.4,
+      capability_progress: 0.65,
+      labor_displacement: 0.45,
+      economic_distribution: 0.2,
+    },
+  },
+  {
+    id: 'layoff_wave',
+    name: 'Layoff Wave',
+    group: 'shock',
+    description: 'White-collar cuts spread across sectors within a year.',
+    values: {
+      labor_displacement: 0.9,
+      economic_distribution: 0.15,
+      information_trust: 0.25,
+    },
+  },
+  {
+    id: 'ai_incident',
+    name: 'Major AI Incident',
+    group: 'shock',
+    description: 'An AI system causes deaths or a large financial loss.',
+    values: {
+      alignment_progress: 0.15,
+      governance_response: 0.9,
+      information_trust: 0.2,
+      geopolitical_stability: 0.22,
+    },
+  },
+  {
+    id: 'automated_research',
+    name: 'Automated AI Research',
+    group: 'shock',
+    description: 'Models do most frontier AI research themselves.',
+    values: {
+      capability_progress: 0.98,
+      compute_growth: 0.95,
+      labor_displacement: 0.8,
+      alignment_progress: 0.25,
+    },
+  },
+  {
+    id: 'power_crunch',
+    name: 'Power Crunch',
+    group: 'shock',
+    description: 'Grid limits stall new data centers.',
+    values: {
+      energy_capacity: 0.18,
+      compute_growth: 0.55,
+    },
+  },
+  {
+    id: 'open_models',
+    name: 'Open Models Catch Up',
+    group: 'shock',
+    description: 'Free models match the frontier and run on a laptop.',
+    values: {
+      ondevice_ai: 0.85,
+      inference_cost_decline: 0.97,
+      economic_distribution: 0.42,
+    },
+  },
+  {
+    id: 'ai_treaty',
+    name: 'US-China AI Treaty',
+    group: 'shock',
+    description: 'Binding compute and safety limits signed by both.',
+    values: {
+      governance_response: 0.9,
+      geopolitical_stability: 0.7,
+      alignment_progress: 0.55,
+    },
+  },
+  {
+    id: 'alignment_breakthrough',
+    name: 'Alignment Breakthrough',
+    group: 'shock',
+    description: 'Interpretability reliably catches deceptive models.',
+    values: {
+      alignment_progress: 0.85,
+    },
   },
   {
     id: 'aravind_optimistic',
     name: 'Curiosity Renaissance',
-    description: "Aravind's optimistic case: alignment works, distribution widens, on-device AI thrives.",
+    group: 'scenario',
+    description: 'Alignment works, gains spread widely, on-device AI thrives.',
     values: {
       alignment_progress: 0.75,
       economic_distribution: 0.65,
@@ -723,9 +821,23 @@ export const PRESETS: PresetConfig[] = [
     },
   },
   {
+    id: 'managed_transition',
+    name: 'Managed Transition',
+    group: 'scenario',
+    description: 'Institutions keep pace. Displacement is real but bounded.',
+    values: {
+      governance_response: 0.9,
+      alignment_progress: 0.5,
+      labor_displacement: 0.3,
+      information_trust: 0.5,
+      geopolitical_stability: 0.55,
+    },
+  },
+  {
     id: 'oligarchic_capture',
     name: 'Oligarchic Capture',
-    description: 'Capability succeeds; distribution fails. Value flows to <5 firms.',
+    group: 'scenario',
+    description: 'Capability succeeds, distribution fails. Value flows to a few firms.',
     values: {
       capability_progress: 0.85,
       inference_cost_decline: 0.85,
@@ -738,7 +850,8 @@ export const PRESETS: PresetConfig[] = [
   {
     id: 'cold_war',
     name: 'Cold AI War',
-    description: 'US-China decoupling, safety cooperation collapses, race dynamics rule.',
+    group: 'scenario',
+    description: 'US-China decoupling. Safety cooperation collapses.',
     values: {
       geopolitical_stability: 0.15,
       alignment_progress: 0.25,
@@ -748,21 +861,10 @@ export const PRESETS: PresetConfig[] = [
     },
   },
   {
-    id: 'compute_wall',
-    name: 'Compute Wall',
-    description: 'Scaling stalls: energy limits, data quality, chip supply hit ceilings.',
-    values: {
-      compute_growth: 0.3,
-      energy_capacity: 0.25,
-      capability_progress: 0.4,
-      alignment_progress: 0.55,
-      labor_displacement: 0.3,
-    },
-  },
-  {
     id: 'great_filter_path',
-    name: 'Great Filter Path',
-    description: 'What Aravind & Joe fear: capability racing, alignment lagging, bio dual-use.',
+    name: 'Great Filter Realized',
+    group: 'scenario',
+    description: 'Capability races ahead of alignment. Bio dual-use rises.',
     values: {
       capability_progress: 0.9,
       alignment_progress: 0.18,
@@ -770,6 +872,19 @@ export const PRESETS: PresetConfig[] = [
       geopolitical_stability: 0.2,
       biotech_ai_fusion: 0.8,
       information_trust: 0.15,
+    },
+  },
+  {
+    id: 'compute_wall',
+    name: 'Compute Wall',
+    group: 'scenario',
+    description: 'Scaling stalls on energy, data, and chip supply.',
+    values: {
+      compute_growth: 0.3,
+      energy_capacity: 0.25,
+      capability_progress: 0.4,
+      alignment_progress: 0.55,
+      labor_displacement: 0.3,
     },
   },
 ];

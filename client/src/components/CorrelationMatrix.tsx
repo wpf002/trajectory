@@ -11,7 +11,7 @@ export function CorrelationMatrix() {
   return (
     <Card className="p-4 h-full">
       <h2 className="text-sm font-medium mb-3">Driver Correlations</h2>
-      <table className="w-full table-fixed text-[11px] font-mono">
+      <table className="w-full table-fixed text-[11px]">
         <colgroup>
           <col className="w-[38%]" />
           {DRIVERS.map(d => <col key={d.id} />)}
@@ -20,8 +20,9 @@ export function CorrelationMatrix() {
           <tr>
             <th />
             {DRIVERS.map(d => (
-              <th key={d.id} className="h-24 relative font-normal">
-                <div className="absolute bottom-1 left-1/2 origin-bottom-left -rotate-[60deg] whitespace-nowrap text-muted-foreground">{d.label}</div>
+              <th key={d.id} className="pb-2 align-bottom font-normal">
+                {/* Vertical, reading upward: stays inside its own column at any width. */}
+                <div className="mx-auto [writing-mode:vertical-rl] rotate-180 whitespace-nowrap text-left text-muted-foreground">{d.label}</div>
               </th>
             ))}
           </tr>

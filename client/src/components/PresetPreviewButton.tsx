@@ -30,7 +30,7 @@ export function PresetPreviewButton({ preset, onApply, currentValues }: PresetPr
           onClick={onApply}
           onFocus={() => setShowDiff(true)}
           onBlur={() => setShowDiff(false)}
-          className="w-full text-left px-2 py-2 rounded text-xs hover:bg-sidebar-accent/50 transition-colors group"
+          className="w-full text-left px-2 py-1.5 rounded text-xs hover:bg-sidebar-accent/50 transition-colors group"
           data-testid={`preset-${preset.id}`}
         >
           <div className="flex items-center justify-between">

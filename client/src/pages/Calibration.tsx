@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { Download, ExternalLink, Play, RefreshCw } from "lucide-react";
+import { Download, Play, RefreshCw } from "lucide-react";
 import type { BacktestRun, CalibrationResidual, ForecastHistoryRow, ModelRelease } from "@shared/schema";
 import { SCENARIOS } from "../../../shared/model";
 import { apiRequest } from "@/lib/queryClient";
@@ -15,7 +15,7 @@ interface Scorecard {
   releases: {
     score: { n: number; meanAbsErrorDays: number; intervalCoverage: number | null } | null;
     resolved: Array<{ id: string; errorDays: number }>;
-    pending: Array<{ id: string; overdue: boolean }>;
+    pending: Array<{ id: string; name: string; predicted: number; overdue: boolean }>;
   };
   crowd: {
     comparisons: Array<{
@@ -37,64 +37,66 @@ interface ExternalForecast {
   updatedAt: string;
 }
 
-const STATUS_TEXT: Record<string, string> = {
-  released: "text-positive",
-  confirmed: "text-info",
-  rumored: "text-warning",
-  delayed: "text-warning",
-  cancelled: "text-negative",
+const STATUS_DOT: Record<string, string> = {
+  released: "bg-positive",
+  confirmed: "bg-info",
+  rumored: "bg-warning",
+  delayed: "bg-warning",
+  cancelled: "bg-negative",
 };
+const BENCH: Record<string, string> = { swe_bench: "SWE", gpqa: "GPQA", arc_agi: "ARC", mmlu: "MMLU" };
 
 // Release and replay dates are stored as UTC midnights; format them in UTC so a
 // first-of-month date doesn't read as the previous month west of Greenwich.
 const day = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const month = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const monthShort = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" });
 const parse = <T,>(json: string | null | undefined, fallback: T): T => {
   try { return json ? JSON.parse(json) : fallback; } catch { return fallback; }
 };
 const stamp = () => new Date().toISOString().slice(0, 10);
+const pp = (v: number) => `${v > 0 ? "+" : ""}${(v * 100).toFixed(1)}pp`;
 
-const TH = "text-left text-[11px] uppercase tracking-widest font-mono font-normal text-muted-foreground px-2 pb-2";
-const TD = "px-2 py-2 text-xs";
+const TH = "text-left text-[11px] font-medium text-muted-foreground px-3 pb-2";
+const TD = "px-3 py-2 text-xs";
 
-function Fact({ label, value, note, tag }: { label: string; value: string; note?: string; tag?: string }) {
+function Stat({ label, value, note, tag }: { label: string; value: string; note?: string; tag?: string }) {
   return (
     <div className="p-4">
-      <div className="text-[11px] uppercase tracking-widest font-mono text-muted-foreground">{label}</div>
-      <div className="mt-1 flex items-baseline gap-2 flex-wrap">
-        <span className="text-sm font-medium">{value}</span>
-        {tag && <span className="text-[11px] font-mono px-2 rounded bg-warning/10 text-warning">{tag}</span>}
+      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+        {label}
+        {tag && <span className="text-[11px] px-1.5 rounded bg-muted">{tag}</span>}
       </div>
-      {note && <div className="mt-1 text-xs font-mono text-muted-foreground">{note}</div>}
+      <div className="mt-2 font-display text-[28px] leading-none tabular-nums">{value}</div>
+      {note && <div className="mt-2 text-xs text-muted-foreground truncate">{note}</div>}
     </div>
   );
 }
 
 function ScenarioChart({ data, xKey, labelFor }: { data: any[]; xKey: string; labelFor?: (row: any) => string }) {
   return (
-    <div className="h-64">
-      <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-          <XAxis dataKey={xKey} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" minTickGap={32} />
-          <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="%" />
-          <Tooltip
-            contentStyle={{ backgroundColor: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
-            formatter={(v: number) => `${v.toFixed(1)}%`}
-            labelFormatter={(v, payload) => (labelFor && payload?.[0] ? labelFor(payload[0].payload) : v)}
-          />
-          {SCENARIOS.map(s => (
-            <Line key={s.id} type="monotone" dataKey={s.id} name={s.name} stroke={s.color} strokeWidth={1.5} dot={false} isAnimationActive={false} />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+    <ResponsiveContainer width="100%" height="100%">
+      <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} vertical={false} />
+        <XAxis dataKey={xKey} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" minTickGap={40} tickLine={false} />
+        <YAxis tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" unit="%" tickLine={false} axisLine={false} />
+        <Tooltip
+          contentStyle={{ backgroundColor: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", fontSize: 12 }}
+          formatter={(v: number) => `${v.toFixed(1)}%`}
+          labelFormatter={(v, payload) => (labelFor && payload?.[0] ? labelFor(payload[0].payload) : v)}
+        />
+        {SCENARIOS.map(s => (
+          <Line key={s.id} type="monotone" dataKey={s.id} name={s.name} stroke={s.color} strokeWidth={1.75} dot={false} isAnimationActive={false} />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
   );
 }
 
 export default function Calibration() {
   const { toast } = useToast();
   const qc = useQueryClient();
+  const [view, setView] = useState<"history" | "replay">("history");
 
   const { data: history = [] } = useQuery<ForecastHistoryRow[]>({ queryKey: ["/api/forecast-history"] });
   const { data: backtests = [] } = useQuery<BacktestRun[]>({ queryKey: ["/api/backtest"] });
@@ -155,157 +157,159 @@ export default function Calibration() {
     ));
 
   const score = scorecard?.releases.score ?? null;
-  const pending = scorecard?.releases.pending ?? [];
+  const pending = [...(scorecard?.releases.pending ?? [])].sort((a, b) => a.predicted - b.predicted);
   const overdue = pending.filter(p => p.overdue).length;
   const errorById = new Map((scorecard?.releases.resolved ?? []).map(r => [r.id, r.errorDays]));
   const gap = scorecard?.crowd.comparisons.find(c => c.residual !== null) ?? null;
 
-  const releaseRows = [...models].sort((a, b) =>
-    (b.releaseDate ?? b.predictedReleaseP50 ?? 0) - (a.releaseDate ?? a.predictedReleaseP50 ?? 0));
   const nowSec = Math.floor(Date.now() / 1000);
+  const upcoming = models.filter(m => !m.releaseDate).sort((a, b) => (a.predictedReleaseP50 ?? 0) - (b.predictedReleaseP50 ?? 0));
+  const released = models.filter(m => m.releaseDate).sort((a, b) => b.releaseDate! - a.releaseDate!);
+
+  const chartRows = view === "history" ? historyRows : replayRows;
+
+  const releaseRow = (m: ModelRelease) => {
+    const late = !m.releaseDate && m.predictedReleaseP50 != null && m.predictedReleaseP50 < nowSec;
+    const err = errorById.get(m.id);
+    const bench = Object.entries(parse<Record<string, number>>(m.benchmarks, {}))
+      .map(([k, v]) => `${BENCH[k] ?? k} ${(v * 100).toFixed(0)}`).join(" · ");
+    const source = parse<string[]>(m.sources, [])[0];
+    return (
+      <li key={m.id} className="flex items-center gap-3 px-4 py-2" title={m.notes ?? undefined} data-testid={`model-${m.id}`}>
+        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${late ? "bg-negative" : STATUS_DOT[m.status] ?? "bg-muted-foreground"}`} title={m.status} />
+        <div className="flex-1 min-w-0">
+          {source
+            ? <a href={source} target="_blank" rel="noreferrer" className="block text-sm truncate hover:underline underline-offset-2">{m.name}</a>
+            : <div className="text-sm truncate">{m.name}</div>}
+          <div className="text-[11px] text-muted-foreground truncate">{m.lab}</div>
+        </div>
+        <div className="text-right shrink-0">
+          <div className="text-xs font-mono tabular-nums">
+            {m.releaseDate ? day(m.releaseDate) : m.predictedReleaseP50 ? month(m.predictedReleaseP50) : ""}
+            {late && <span className="ml-2 text-negative">Overdue</span>}
+            {err != null && <span className="ml-2 text-muted-foreground">{err > 0 ? "+" : ""}{err.toFixed(0)}d</span>}
+          </div>
+          <div className="text-[11px] font-mono tabular-nums text-muted-foreground">
+            {m.releaseDate ? bench : m.predictedReleaseP10 && m.predictedReleaseP90 ? `${monthShort(m.predictedReleaseP10)} – ${monthShort(m.predictedReleaseP90)}` : ""}
+          </div>
+        </div>
+      </li>
+    );
+  };
 
   return (
     <div className={PAGE_CLASS}>
-      <PageHeader title="Calibration">
-        {scorecard?.crowd.tokenConfigured && (
-          <Button size="sm" variant="outline" className="h-8 text-xs gap-2" onClick={() => refresh.mutate()} disabled={refresh.isPending} data-testid="button-refresh-residuals">
-            <RefreshCw className={`w-3 h-3 ${refresh.isPending ? "animate-spin" : ""}`} /> Refresh Metaculus
-          </Button>
-        )}
-        <Button size="sm" variant="outline" className="h-8 text-xs gap-2" onClick={() => replay.mutate()} disabled={replay.isPending} data-testid="button-run-backtest">
-          <Play className="w-3 h-3" /> {replay.isPending ? "Running" : "Run Replay"}
-        </Button>
-      </PageHeader>
+      <PageHeader title="Calibration" />
 
       <Card className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-border" data-testid="card-track-record">
-        <Fact label="Scenario Accuracy" value="Not scoreable until 2028" />
-        <Fact
+        <Stat label="Scenario Accuracy" value="Unscored" note="Scenarios resolve in 2028" />
+        <Stat
           label="Release Calls"
-          value={score ? `Off by ${score.meanAbsErrorDays.toFixed(0)} days on average` : "None resolved"}
+          value={score ? `${score.meanAbsErrorDays.toFixed(0)} days off` : `${pending.length} pending`}
           note={[
             score ? `${score.n} resolved` : null,
-            `${pending.length} pending`,
             overdue ? `${overdue} overdue` : null,
-            score?.intervalCoverage != null ? `${(score.intervalCoverage * 100).toFixed(0)}% inside range` : null,
+            pending[0] ? `${pending[0].name} due ${month(pending[0].predicted)}` : null,
           ].filter(Boolean).join(" · ")}
         />
-        <Fact
-          label="Against Metaculus"
-          value={gap?.residual != null ? `${gap.residual > 0 ? "+" : ""}${(gap.residual * 100).toFixed(1)}pp` : "No data"}
-          tag={gap?.source === "snapshot" ? "stored" : undefined}
-          note={gap ? `${gap.title} Ours ${(gap.ours! * 100).toFixed(1)}%, crowd ${(gap.crowd! * 100).toFixed(1)}%` : undefined}
+        <Stat
+          label="Vs Metaculus"
+          value={gap?.residual != null ? pp(gap.residual) : "No data"}
+          tag={gap?.source === "snapshot" ? "Stored" : undefined}
+          note={gap ? `${gap.title} · ours ${(gap.ours! * 100).toFixed(1)}%, crowd ${(gap.crowd! * 100).toFixed(1)}%` : undefined}
         />
       </Card>
 
-      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap text-xs px-1">
-        {SCENARIOS.map(s => (
-          <span key={s.id} className="inline-flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: s.color }} />{s.name}
-          </span>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <h2 className="text-sm font-medium">Forecast History</h2>
-            <span className="text-xs font-mono text-muted-foreground">{historyRows.length} snapshots</span>
-            <button onClick={() => exportRows("forecast-history", historyRows, ["date"])} disabled={!historyRows.length}
-              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40" data-testid="button-export-history-csv">
-              <Download className="w-3 h-3" /> CSV
-            </button>
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
+        <Card className="xl:col-span-8 p-4 flex flex-col">
+          <div className="flex items-center gap-3 flex-wrap mb-4">
+            <div className="inline-flex rounded-md border border-border p-1" role="tablist">
+              {([["history", "History"], ["replay", "Replay"]] as const).map(([id, label]) => (
+                <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)} data-testid={`tab-${id}`}
+                  className={`px-3 h-6 text-xs rounded transition-colors ${view === id ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs font-mono text-muted-foreground">
+              {view === "history"
+                ? `${historyRows.length} snapshots`
+                : latestReplay ? `${latestReplay.eventCount} events · ${month(latestReplay.startDate)} – ${month(latestReplay.endDate)}` : ""}
+            </span>
+            <div className="ml-auto flex items-center gap-1">
+              {view === "replay" && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs gap-1.5" onClick={() => replay.mutate()} disabled={replay.isPending} data-testid="button-run-backtest">
+                  <Play className="w-3 h-3" /> {replay.isPending ? "Running" : "Run"}
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" className="h-7 text-xs gap-1.5" disabled={!chartRows.length}
+                onClick={() => view === "history" ? exportRows("forecast-history", historyRows, ["date"]) : exportRows("replay", replayRows, ["date", "event"])}
+                data-testid="button-export-csv">
+                <Download className="w-3 h-3" /> CSV
+              </Button>
+            </div>
           </div>
-          {historyRows.length ? <ScenarioChart data={historyRows} xKey="date" /> : <div className="h-64 grid place-items-center text-sm text-muted-foreground">No history yet.</div>}
+          <div className="flex-1 min-h-[300px]">
+            {chartRows.length
+              ? <ScenarioChart data={chartRows} xKey="date" labelFor={view === "replay" ? r => `${r.date} · ${r.event}` : undefined} />
+              : <div className="h-full grid place-items-center text-sm text-muted-foreground">{view === "history" ? "No history yet." : "Not run yet."}</div>}
+          </div>
+          <div className="mt-3 flex items-center gap-x-4 gap-y-1 flex-wrap text-[11px] text-muted-foreground">
+            {SCENARIOS.map(s => (
+              <span key={s.id} className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-0.5" style={{ backgroundColor: s.color }} />{s.name}
+              </span>
+            ))}
+          </div>
         </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-3 mb-3">
-            <h2 className="text-sm font-medium">Historical Replay</h2>
-            {latestReplay && <span className="text-xs font-mono text-muted-foreground">{latestReplay.eventCount} events, {month(latestReplay.startDate)} – {month(latestReplay.endDate)}</span>}
-            <button onClick={() => exportRows("replay", replayRows, ["date", "event"])} disabled={!replayRows.length}
-              className="ml-auto flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-40" data-testid="button-export-backtest-csv">
-              <Download className="w-3 h-3" /> CSV
-            </button>
-          </div>
-          {replayRows.length
-            ? <ScenarioChart data={replayRows} xKey="date" labelFor={r => `${r.date} · ${r.event}`} />
-            : <div className="h-64 grid place-items-center text-sm text-muted-foreground">Not run yet.</div>}
+        <Card className="xl:col-span-4 py-3" data-testid="card-model-releases">
+          <h2 className="px-4 pb-2 text-sm font-medium">Model Releases</h2>
+          {upcoming.length > 0 && <>
+            <div className="px-4 pt-1 text-[11px] text-muted-foreground">Upcoming</div>
+            <ul>{upcoming.map(releaseRow)}</ul>
+          </>}
+          {released.length > 0 && <>
+            <div className="px-4 pt-3 text-[11px] text-muted-foreground border-t border-border mt-2">Released</div>
+            <ul>{released.map(releaseRow)}</ul>
+          </>}
         </Card>
       </div>
 
-      <Card className="p-4 overflow-x-auto" data-testid="card-model-releases">
-        <h2 className="text-sm font-medium mb-3">Model Releases</h2>
-        <table className="w-full min-w-[720px]">
-          <thead>
-            <tr className="border-b border-border">
-              <th className={TH}>Model</th><th className={TH}>Lab</th><th className={TH}>Status</th><th className={TH}>Date</th>
-              <th className={TH}>80% Range</th><th className={`${TH} text-right`}>Capability</th><th className={TH}>Benchmarks</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-border/50">
-            {releaseRows.map(m => {
-              const benchmarks = Object.entries(parse<Record<string, number>>(m.benchmarks, {}));
-              const source = parse<string[]>(m.sources, [])[0];
-              const err = errorById.get(m.id);
-              const late = !m.releaseDate && m.predictedReleaseP50 != null && m.predictedReleaseP50 < nowSec;
-              return (
-                <tr key={m.id} data-testid={`model-${m.id}`} title={m.notes ?? undefined}>
-                  <td className={`${TD} font-medium`}>
-                    {source
-                      ? <a href={source} target="_blank" rel="noreferrer" className="hover:text-accent inline-flex items-center gap-1">{m.name}<ExternalLink className="w-3 h-3 opacity-60" /></a>
-                      : m.name}
-                  </td>
-                  <td className={`${TD} text-muted-foreground`}>{m.lab}</td>
-                  <td className={`${TD} font-mono ${STATUS_TEXT[m.status] ?? "text-muted-foreground"}`}>{m.status}</td>
-                  <td className={`${TD} font-mono tabular-nums`}>
-                    {m.releaseDate ? day(m.releaseDate) : m.predictedReleaseP50 ? month(m.predictedReleaseP50) : ""}
-                    {late && <span className="ml-2 text-warning">overdue</span>}
-                    {err != null && <span className="ml-2 text-muted-foreground">{err > 0 ? "+" : ""}{err.toFixed(0)}d</span>}
-                  </td>
-                  <td className={`${TD} font-mono tabular-nums text-muted-foreground`}>
-                    {m.predictedReleaseP10 && m.predictedReleaseP90 ? `${month(m.predictedReleaseP10)} – ${month(m.predictedReleaseP90)}` : ""}
-                  </td>
-                  <td className={`${TD} font-mono tabular-nums text-right`}>
-                    {typeof m.capabilityDelta === "number" ? `+${(m.capabilityDelta * 100).toFixed(0)}%` : ""}
-                  </td>
-                  <td className={`${TD} font-mono tabular-nums text-muted-foreground`}>
-                    {benchmarks.map(([k, v]) => `${k.replace(/_/g, " ")} ${(v * 100).toFixed(0)}`).join(" · ")}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </Card>
-
-      <Card className="p-4 overflow-x-auto" data-testid="card-crowd">
-        <h2 className="text-sm font-medium mb-3">Crowd Forecasts</h2>
-        {external.length === 0 ? <div className="p-4 text-sm text-muted-foreground">None loaded.</div> : (
+      <Card className="py-3 overflow-x-auto" data-testid="card-crowd">
+        <div className="px-4 pb-2 flex items-center gap-3">
+          <h2 className="text-sm font-medium">Crowd Forecasts</h2>
+          <span className="text-xs font-mono text-muted-foreground">{external.length}</span>
+          {scorecard?.crowd.tokenConfigured && (
+            <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs gap-1.5" onClick={() => refresh.mutate()} disabled={refresh.isPending} data-testid="button-refresh-residuals">
+              <RefreshCw className={`w-3 h-3 ${refresh.isPending ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          )}
+        </div>
+        {external.length === 0 ? <div className="px-4 py-4 text-sm text-muted-foreground">None loaded.</div> : (
           <table className="w-full min-w-[640px]">
             <thead>
               <tr className="border-b border-border">
-                <th className={TH}>Question</th><th className={TH}>Source</th><th className={`${TH} text-right`}>Forecast</th>
-                <th className={`${TH} text-right`}>Forecasters</th><th className={`${TH} text-right`}>Updated</th>
+                <th className={`${TH} pl-4`}>Question</th><th className={TH}>Source</th><th className={`${TH} text-right`}>Forecast</th>
+                <th className={`${TH} text-right`}>Forecasters</th><th className={`${TH} text-right pr-4`}>Updated</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
               {external.map((f, i) => (
-                <tr key={i} data-testid={`crowd-row-${i}`}>
-                  <td className={TD}>
-                    <a href={f.url} target="_blank" rel="noreferrer" className="hover:text-accent inline-flex items-center gap-1">
-                      {f.question}<ExternalLink className="w-3 h-3 opacity-60 shrink-0" />
-                    </a>
+                <tr key={i} data-testid={`crowd-row-${i}`} className="hover:bg-muted/30">
+                  <td className={`${TD} pl-4`}>
+                    <a href={f.url} target="_blank" rel="noreferrer" className="hover:underline underline-offset-2">{f.question}</a>
                   </td>
-                  <td className={`${TD} font-mono text-muted-foreground whitespace-nowrap`}>
+                  <td className={`${TD} text-muted-foreground whitespace-nowrap`}
+                    title={f.source === "metaculus" && !scorecard?.crowd.tokenConfigured ? "Stored snapshot" : undefined}>
                     {f.source === "metaculus" ? "Metaculus" : "Manifold"}
-                    {f.source === "metaculus" && <span className="ml-2 text-warning">stored</span>}
                   </td>
                   <td className={`${TD} font-mono tabular-nums text-right whitespace-nowrap`}>
-                    {typeof f.probability === "number" ? `${(f.probability * 100).toFixed(1)}%` : f.medianYear ? `median ${f.medianYear}` : ""}
+                    {typeof f.probability === "number" ? `${(f.probability * 100).toFixed(1)}%` : f.medianYear ? <><span className="text-muted-foreground">median </span>{f.medianYear}</> : ""}
                   </td>
-                  <td className={`${TD} font-mono tabular-nums text-right text-muted-foreground`}>{f.numForecasters ?? ""}</td>
-                  <td className={`${TD} font-mono tabular-nums text-right text-muted-foreground whitespace-nowrap`}>
-                    {new Date(f.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  <td className={`${TD} font-mono tabular-nums text-right text-muted-foreground`}>{f.numForecasters?.toLocaleString() ?? ""}</td>
+                  <td className={`${TD} font-mono tabular-nums text-right text-muted-foreground whitespace-nowrap pr-4`}>
+                    {new Date(f.updatedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}
                   </td>
                 </tr>
               ))}

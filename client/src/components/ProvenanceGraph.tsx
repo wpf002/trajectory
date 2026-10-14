@@ -1,17 +1,15 @@
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { DRIVERS, SCENARIOS, type Scenario } from "@shared/model";
+import { Card } from "@/components/ui/card";
+import { DRIVERS, SCENARIOS, computeScenarioProbabilities } from "@shared/model";
 import type { Signal } from "@shared/schema";
+import { useTrajectoryStore } from "@/lib/store";
 
-type Node = { id: string; label: string; y: number; sub?: string; color?: string };
-type Edge = { from: string; to: string; weight: number; color?: string };
+type Edge = { from: string; to: string; weight: number; up: boolean };
+type Box = { left: number; right: number; mid: number };
 
-const COL_X = { signal: 40, driver: 380, scenario: 780 };
-const NODE_W = 180;
-const NODE_H = 26;
+// Driver -> scenario links lighter than this aren't drawn.
+const MIN_WEIGHT = 0.3;
 
 function parseImpacts(raw?: string | null): Record<string, number> {
   if (!raw) return {};
@@ -23,287 +21,186 @@ function parseImpacts(raw?: string | null): Record<string, number> {
   }
 }
 
+const domainOf = (s: Signal) => {
+  if (s.sourceDomain) return s.sourceDomain;
+  try { return new URL(s.source).hostname.replace(/^www\./, ""); } catch { return s.source; }
+};
+const shortDate = (sec: number) => new Date(sec * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
 export function ProvenanceGraph() {
   const { data: signals = [] } = useQuery<Signal[]>({ queryKey: ["/api/signals"] });
-  const [focusScenario, setFocusScenario] = useState<string | null>(null);
+  const newsBaseline = useTrajectoryStore(s => s.newsBaseline);
+  const [hover, setHover] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const active = pinned ?? hover;
 
-  const { signalNodes, driverNodes, scenarioNodes, edges, height } = useMemo(() => {
-    // The 12 newest signals that moved a driver. "Newest" is relative to the
-    // data, not the wall clock: a 14-day wall-clock window showed nothing
-    // whenever the collectors hadn't run for two weeks.
+  const { recent, edges } = useMemo(() => {
+    // The 12 newest signals that moved a driver, newest relative to the data.
     const recent = signals
-      .filter((s) => s.sourceTier !== "rejected" && Object.keys(parseImpacts(s.driverImpacts)).length > 0)
+      .filter(s => s.sourceTier !== "rejected" && Object.keys(parseImpacts(s.driverImpacts)).length > 0)
       .sort((a, b) => b.timestamp - a.timestamp)
       .slice(0, 12);
 
-    // Driver nodes (all 12)
-    const driverNodes: Node[] = DRIVERS.map((d, i) => ({
-      id: `d:${d.id}`,
-      label: d.label,
-      y: 20 + i * (NODE_H + 8),
-      sub: d.category,
-    }));
-
-    // Signal nodes (up to 12)
-    const signalNodes: Node[] = recent.map((s, i) => ({
-      id: `s:${s.id}`,
-      label: s.title.length > 34 ? s.title.slice(0, 32) + "…" : s.title,
-      y: 20 + i * (NODE_H + 8),
-      sub: s.source,
-    }));
-
-    // Scenario nodes (6)
-    const scenarioNodes: Node[] = SCENARIOS.map((sc, i) => ({
-      id: `sc:${sc.id}`,
-      label: sc.name,
-      y: 20 + i * (NODE_H + 26),
-      color: sc.color,
-    }));
-
-    // Edges: signal → driver, thickness relative to the largest impact shown.
-    // Stored impacts are confidence- and tier-weighted (typically under 0.02),
-    // so a fixed cutoff written for raw impacts hid every edge.
-    const sdEdges: Edge[] = [];
+    // Stored impacts are confidence- and tier-weighted, so scale to the largest shown.
     const maxImpact = Math.max(
-      ...recent.flatMap((s) => Object.values(parseImpacts(s.driverImpacts)).map((d) => Math.abs(d))),
+      ...recent.flatMap(s => Object.values(parseImpacts(s.driverImpacts)).map(Math.abs)),
       1e-6,
     );
-    recent.forEach((s) => {
-      Object.entries(parseImpacts(s.driverImpacts)).forEach(([driverId, delta]) => {
+    const edges: Edge[] = [];
+    for (const s of recent) {
+      for (const [driverId, delta] of Object.entries(parseImpacts(s.driverImpacts))) {
         const rel = Math.abs(delta) / maxImpact;
-        if (rel < 0.1) return;
-        sdEdges.push({
-          from: `s:${s.id}`,
-          to: `d:${driverId}`,
-          weight: rel,
-          color: delta > 0 ? "hsl(var(--positive))" : "hsl(var(--negative))",
-        });
-      });
-    });
-
-    // Edges: driver → scenario (from scenario.driverWeights)
-    const dsEdges: Edge[] = [];
-    SCENARIOS.forEach((sc: Scenario) => {
-      Object.entries(sc.driverWeights).forEach(([driverId, weight]) => {
-        if (!weight || Math.abs(weight) < 0.15) return;
-        dsEdges.push({
-          from: `d:${driverId}`,
-          to: `sc:${sc.id}`,
-          weight: Math.min(Math.abs(weight), 1),
-          color: sc.color,
-        });
-      });
-    });
-
-    const edges = [...sdEdges, ...dsEdges];
-
-    const height =
-      Math.max(
-        signalNodes.length * (NODE_H + 8) + 40,
-        driverNodes.length * (NODE_H + 8) + 40,
-        scenarioNodes.length * (NODE_H + 26) + 40,
-      ) + 20;
-
-    return { signalNodes, driverNodes, scenarioNodes, edges, height };
+        if (rel >= 0.1) edges.push({ from: `s:${s.id}`, to: `d:${driverId}`, weight: rel, up: delta > 0 });
+      }
+    }
+    for (const sc of SCENARIOS) {
+      for (const [driverId, w] of Object.entries(sc.driverWeights)) {
+        if (w && Math.abs(w) >= MIN_WEIGHT) edges.push({ from: `d:${driverId}`, to: `sc:${sc.id}`, weight: Math.min(Math.abs(w), 1), up: w > 0 });
+      }
+    }
+    return { recent, edges };
   }, [signals]);
 
-  const allNodes = [...signalNodes, ...driverNodes, ...scenarioNodes];
-  const nodeById = new Map(allNodes.map((n) => [n.id, n]));
+  const probs = useMemo(
+    () => newsBaseline ? Object.fromEntries(computeScenarioProbabilities(newsBaseline).map(p => [p.id, p.probability])) : {},
+    [newsBaseline],
+  );
 
-  const getX = (id: string) =>
-    id.startsWith("s:") ? COL_X.signal : id.startsWith("d:") ? COL_X.driver : COL_X.scenario;
-
-  const isEdgeVisible = (e: Edge) => {
-    if (!focusScenario) return true;
-    // Show only edges connected to focus scenario (either directly, or via a driver that feeds it)
-    if (e.to === `sc:${focusScenario}`) return true;
-    if (e.from.startsWith("s:") && e.to.startsWith("d:")) {
-      // check if this driver connects to focused scenario
-      const driverId = e.to.slice(2);
-      const sc = SCENARIOS.find((s) => s.id === focusScenario);
-      return sc ? Math.abs(sc.driverWeights[driverId as never] ?? 0) >= 0.15 : false;
+  // Everything connected to the active node, upstream and downstream.
+  const related = useMemo(() => {
+    if (!active) return null;
+    const nodes = new Set<string>([active]);
+    const links = new Set<Edge>();
+    const into = (id: string) => edges.filter(e => e.to === id);
+    const outOf = (id: string) => edges.filter(e => e.from === id);
+    const add = (e: Edge) => { links.add(e); nodes.add(e.from); nodes.add(e.to); };
+    if (active.startsWith("s:")) {
+      outOf(active).forEach(e => { add(e); outOf(e.to).forEach(add); });
+    } else if (active.startsWith("d:")) {
+      into(active).forEach(add);
+      outOf(active).forEach(add);
+    } else {
+      into(active).forEach(e => { add(e); into(e.from).forEach(add); });
     }
-    return false;
+    return { nodes, links };
+  }, [active, edges]);
+
+  // Node positions, measured from the laid-out HTML so text stays crisp at any width.
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const nodeRefs = useRef(new Map<string, HTMLElement>());
+  const [boxes, setBoxes] = useState<Map<string, Box>>(new Map());
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const wrap = wrapRef.current;
+    if (!wrap) return;
+    const measure = () => {
+      const origin = wrap.getBoundingClientRect();
+      const next = new Map<string, Box>();
+      nodeRefs.current.forEach((el, id) => {
+        const r = el.getBoundingClientRect();
+        next.set(id, { left: r.left - origin.left, right: r.right - origin.left, mid: r.top - origin.top + r.height / 2 });
+      });
+      setBoxes(next);
+      setSize({ w: origin.width, h: origin.height });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [recent.length]);
+
+  const ref = (id: string) => (el: HTMLElement | null) => {
+    if (el) nodeRefs.current.set(id, el);
+    else nodeRefs.current.delete(id);
   };
+  const nodeProps = (id: string) => ({
+    ref: ref(id),
+    onMouseEnter: () => setHover(id),
+    onMouseLeave: () => setHover(null),
+    onClick: () => setPinned(p => (p === id ? null : id)),
+    style: { opacity: related && !related.nodes.has(id) ? 0.3 : 1 },
+    "data-testid": `node-${id}`,
+  });
+  const nodeClass = (id: string) =>
+    `rounded-md border bg-card px-3 cursor-pointer transition-[opacity,border-color] ${pinned === id ? "border-accent" : "border-border hover:border-foreground/30"}`;
+
+  if (recent.length === 0) {
+    return (
+      <Card className="p-8 text-sm text-muted-foreground text-center" data-testid="text-provenance-empty">
+        No signals yet.
+      </Card>
+    );
+  }
 
   return (
-    <Card data-testid="card-provenance-graph">
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            Signal → Driver → Scenario
-          </CardTitle>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              size="sm"
-              variant={focusScenario === null ? "default" : "outline"}
-              onClick={() => setFocusScenario(null)}
-              data-testid="button-provenance-all"
-              className="h-7 text-xs"
-            >
-              All
-            </Button>
-            {SCENARIOS.map((sc) => (
-              <Button
-                key={sc.id}
-                size="sm"
-                variant={focusScenario === sc.id ? "default" : "outline"}
-                onClick={() => setFocusScenario(sc.id)}
-                data-testid={`button-provenance-focus-${sc.id}`}
-                className="h-7 text-xs"
-                style={
-                  focusScenario === sc.id
-                    ? { backgroundColor: sc.color, color: "white", borderColor: sc.color }
-                    : {}
-                }
-              >
-                {sc.name}
-              </Button>
+    <Card className="p-4 overflow-x-auto" data-testid="card-provenance-graph">
+      <div className="min-w-[880px]">
+        <div className="grid grid-cols-[minmax(0,5fr)_minmax(40px,2fr)_minmax(0,3fr)_minmax(40px,2fr)_minmax(0,3fr)] text-[11px] text-muted-foreground mb-2">
+          <span>Signals</span><span /><span>Drivers</span><span /><span className="flex items-center justify-between">
+            Scenarios
+            <span className="flex items-center gap-3">
+              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-positive" />Raises</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-0.5 bg-negative" />Lowers</span>
+            </span>
+          </span>
+        </div>
+
+        <div ref={wrapRef} className="relative grid grid-cols-[minmax(0,5fr)_minmax(40px,2fr)_minmax(0,3fr)_minmax(40px,2fr)_minmax(0,3fr)]" data-testid="svg-provenance">
+          <svg className="absolute inset-0 pointer-events-none" width={size.w} height={size.h}>
+            {edges.map((e, i) => {
+              const a = boxes.get(e.from);
+              const b = boxes.get(e.to);
+              if (!a || !b) return null;
+              const x1 = a.right, x2 = b.left, mx = (x1 + x2) / 2;
+              const on = related?.links.has(e);
+              const base = e.from.startsWith("s:") ? 0.45 : 0.14;
+              return (
+                <path
+                  key={i}
+                  d={`M ${x1},${a.mid} C ${mx},${a.mid} ${mx},${b.mid} ${x2},${b.mid}`}
+                  // style, not the stroke attribute: presentation attributes don't resolve var().
+                  style={{ stroke: `hsl(var(${e.up ? "--positive" : "--negative"}))` }}
+                  strokeWidth={1 + e.weight * 2}
+                  fill="none"
+                  opacity={related ? (on ? 0.9 : 0.04) : base}
+                  data-testid={`edge-${e.from}-${e.to}`}
+                />
+              );
+            })}
+          </svg>
+
+          <div className="relative flex flex-col gap-1.5">
+            {recent.map(s => (
+              <div key={s.id} {...nodeProps(`s:${s.id}`)} className={`${nodeClass(`s:${s.id}`)} h-11 flex flex-col justify-center`} title={s.title}>
+                <div className="text-xs truncate">{s.title}</div>
+                <div className="text-[11px] font-mono text-muted-foreground truncate">{shortDate(s.timestamp)} · {domainOf(s)}</div>
+              </div>
             ))}
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {signalNodes.length === 0 ? (
-          <div className="text-sm text-muted-foreground py-8 text-center" data-testid="text-provenance-empty">
-            No signals yet.
+          <div />
+          <div className="relative flex flex-col gap-1.5">
+            {DRIVERS.map(d => (
+              <div key={d.id} {...nodeProps(`d:${d.id}`)} className={`${nodeClass(`d:${d.id}`)} h-11 flex items-center gap-2`}>
+                <span className="text-xs truncate flex-1">{d.label}</span>
+                {newsBaseline && <span className="text-[11px] font-mono tabular-nums text-muted-foreground">{(newsBaseline[d.id] * 100).toFixed(0)}</span>}
+              </div>
+            ))}
           </div>
-        ) : (
-          <div className="w-full overflow-x-auto">
-            <svg
-              viewBox={`0 0 ${COL_X.scenario + NODE_W + 20} ${height}`}
-              width="100%"
-              className="text-foreground"
-              data-testid="svg-provenance"
-            >
-              {/* column headers */}
-              <text x={COL_X.signal} y={12} fontSize="10" fill="currentColor" opacity="0.6">
-                RECENT SIGNALS ({signalNodes.length})
-              </text>
-              <text x={COL_X.driver} y={12} fontSize="10" fill="currentColor" opacity="0.6">
-                DRIVERS (12)
-              </text>
-              <text x={COL_X.scenario} y={12} fontSize="10" fill="currentColor" opacity="0.6">
-                SCENARIOS (6)
-              </text>
-
-              {/* edges (behind nodes) */}
-              {edges.map((e, i) => {
-                const from = nodeById.get(e.from);
-                const to = nodeById.get(e.to);
-                if (!from || !to) return null;
-                const x1 = getX(e.from) + NODE_W;
-                const y1 = from.y + NODE_H / 2;
-                const x2 = getX(e.to);
-                const y2 = to.y + NODE_H / 2;
-                const midX = (x1 + x2) / 2;
-                const visible = isEdgeVisible(e);
-                return (
-                  <path
-                    key={i}
-                    d={`M ${x1},${y1} C ${midX},${y1} ${midX},${y2} ${x2},${y2}`}
-                    // style, not the stroke attribute: SVG presentation attributes
-                    // don't resolve var(), and edge colors are theme tokens.
-                    style={{ stroke: e.color ?? "hsl(var(--muted-foreground))" }}
-                    strokeWidth={Math.max(0.5, e.weight * 3)}
-                    fill="none"
-                    opacity={visible ? 0.55 : 0.05}
-                    data-testid={`edge-${e.from}-${e.to}`}
-                  />
-                );
-              })}
-
-              {/* signal nodes */}
-              {signalNodes.map((n) => (
-                <g key={n.id} data-testid={`node-${n.id}`}>
-                  <rect
-                    x={COL_X.signal}
-                    y={n.y}
-                    width={NODE_W}
-                    height={NODE_H}
-                    rx={4}
-                    className="fill-card stroke-border"
-                    strokeWidth={1}
-                  />
-                  <text x={COL_X.signal + 6} y={n.y + 12} fontSize="10" fill="currentColor">
-                    {n.label}
-                  </text>
-                  <text
-                    x={COL_X.signal + 6}
-                    y={n.y + 22}
-                    fontSize="8"
-                    fill="currentColor"
-                    opacity="0.5"
-                  >
-                    {n.sub}
-                  </text>
-                </g>
-              ))}
-
-              {/* driver nodes */}
-              {driverNodes.map((n) => (
-                <g key={n.id} data-testid={`node-${n.id}`}>
-                  <rect
-                    x={COL_X.driver}
-                    y={n.y}
-                    width={NODE_W}
-                    height={NODE_H}
-                    rx={4}
-                    className="fill-muted stroke-border"
-                    strokeWidth={1}
-                  />
-                  <text x={COL_X.driver + 6} y={n.y + 12} fontSize="10" fill="currentColor">
-                    {n.label}
-                  </text>
-                  <text
-                    x={COL_X.driver + 6}
-                    y={n.y + 22}
-                    fontSize="8"
-                    fill="currentColor"
-                    opacity="0.5"
-                  >
-                    {n.sub}
-                  </text>
-                </g>
-              ))}
-
-              {/* scenario nodes */}
-              {scenarioNodes.map((n) => (
-                <g key={n.id} data-testid={`node-${n.id}`}>
-                  <rect
-                    x={COL_X.scenario}
-                    y={n.y}
-                    width={NODE_W}
-                    height={NODE_H}
-                    rx={4}
-                    fill={n.color}
-                    opacity={focusScenario && focusScenario !== n.id.slice(3) ? 0.3 : 0.95}
-                  />
-                  <text
-                    x={COL_X.scenario + 6}
-                    y={n.y + 17}
-                    fontSize="11"
-                    fill="white"
-                    fontWeight="600"
-                  >
-                    {n.label}
-                  </text>
-                </g>
-              ))}
-            </svg>
-          </div>
-        )}
-        <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-0.5" style={{ backgroundColor: "hsl(var(--positive))" }} />
-            <span>Up</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-3 h-0.5" style={{ backgroundColor: "hsl(var(--negative))" }} />
-            <span>Down</span>
+          <div />
+          <div className="relative flex flex-col justify-around">
+            {SCENARIOS.map(sc => {
+              const props = nodeProps(`sc:${sc.id}`);
+              return (
+                <div key={sc.id} {...props} className={`${nodeClass(`sc:${sc.id}`)} h-12 flex items-center gap-2 border-l-[3px]`}
+                  style={{ ...props.style, borderLeftColor: sc.color }}>
+                  <span className="text-sm truncate flex-1">{sc.name}</span>
+                  {probs[sc.id] != null && <span className="text-xs font-mono tabular-nums">{(probs[sc.id] * 100).toFixed(1)}%</span>}
+                </div>
+              );
+            })}
           </div>
         </div>
-      </CardContent>
+      </div>
     </Card>
   );
 }
